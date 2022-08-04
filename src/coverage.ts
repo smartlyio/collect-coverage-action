@@ -15,6 +15,10 @@ export async function run(opts: Opts) {
     const pct = coverage.total[flavor]?.pct;
     if (pct != null) {
       if (opts.token) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `Registering total coverage for ${opts.project}: ${opts.tag} ${flavor}: ${pct}`
+        );
         const data = { project: opts.project, flavor: flavor, value: pct, tag: opts.tag };
         await axios.post(opts.url, data, {
           headers: { Authorization: `Bearer ${opts.token}` }
