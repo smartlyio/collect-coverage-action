@@ -1,10 +1,10 @@
 # Collect coverage action
 
-Collect coverage percentages to a centralised repository.
+Collect coverage percentages to a centralised repository
 
 ## Usage
 
-add following to your steps
+add following to your steps after the step running your test suite
 
 ```
     - name: annotate uncovered lines
@@ -14,6 +14,15 @@ add following to your steps
         authorization-token: ${{ secrets.some-bearer-token-for-the-url }}
         url: https://example.com/stats
 ```
+
+Where `coverage/coverage-final.json` is the file that has been produced by jest
+(if you can produce a similar file without jest that is fine also)
+with option
+
+```
+coverageReporters: ['json-summary']
+```
+
 
 This will result in a request like
 
