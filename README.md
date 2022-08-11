@@ -38,3 +38,7 @@ curl \
 
 the same action sends a request for 'branches', 'statements' and 'functions' coverage if it finds those from the
 coverage json
+
+## Development
+
+To test `yarn ts-node test.ts`
