@@ -3,6 +3,14 @@ import * as cov from './src/coverage';
 async function run() {
   await cov.run({
     dryRun: true,
+    coverage: 'test/packages/a/coverage/coverage.json',
+    token: 'token',
+    project: 'project',
+    tag: 'pr-124',
+    url: 'https://example.com'
+  });
+  await cov.run({
+    dryRun: true,
     coverage: 'test/packages/*/coverage/coverage.json',
     token: 'token',
     project: 'project',
