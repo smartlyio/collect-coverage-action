@@ -5,11 +5,12 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
-    "prebuild": "yarn clean && yarn lint",
+    "prebuild": "yarn clean && yarn lint && yarn test",
     "lint": "eslint --max-warnings=0  --ext .ts src",
     "clean": "rm -rf dist",
     "package": "ncc build src/index.ts --source-map --license licenses.txt",
-    "test": "ts-node test.ts"
+    "test": "ts-node test.ts",
+    "version": "yarn build && yarn package && git add -f -- dist/index.js"
   },
   "dependencies": {
     "@actions/core": "^1.2.6",
