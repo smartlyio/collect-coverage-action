@@ -18854,18 +18854,27 @@ async function run(opts) {
     const tagger = withSubPackage(opts.coverage);
     for (const file of glob.sync(opts.coverage)) {
         assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
-        await getCoverageFromFile(Object.assign(Object.assign({}, opts), { coverage: file, project: tagger(opts.project, file) }));
+        await publishCoverage(Object.assign(Object.assign({}, opts), { coverage: file, project: tagger(opts.project, file) }));
     }
 }
 exports.run = run;
-async function getCoverageFromFile(opts) {
-    var _a;
+async function publishCoverage(opts) {
+    var _a, _b, _c;
     const coverage = JSON.parse(fs.readFileSync(opts.coverage, 'utf8'));
     for (const flavor of ['branches', 'statements', 'functions']) {
         const pct = (_a = coverage.total[flavor]) === null || _a === void 0 ? void 0 : _a.pct;
+        const coveredItems = (_b = coverage.total[flavor]) === null || _b === void 0 ? void 0 : _b.covered;
+        const totalItems = (_c = coverage.total[flavor]) === null || _c === void 0 ? void 0 : _c.total;
         if (pct != null) {
             if (opts.token) {
-                const data = { project: opts.project, flavor: flavor, value: pct, tag: opts.tag };
+                const data = {
+                    project: opts.project,
+                    flavor: flavor,
+                    value: pct,
+                    tag: opts.tag,
+                    covered_items: coveredItems,
+                    total_items: totalItems
+                };
                 if (opts.dryRun) {
                     // eslint-disable-next-line no-console
                     console.log(data);
