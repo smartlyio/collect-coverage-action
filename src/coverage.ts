@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import axios from 'axios';
 import * as assert from 'assert';
 import * as glob from 'glob';
-
 type Opts = {
   coverage: string;
   token: string;
@@ -34,7 +33,7 @@ export async function run(opts: Opts) {
 
 async function publishCoverage(opts: Opts) {
   const coverage = JSON.parse(fs.readFileSync(opts.coverage, 'utf8'));
-  for (const flavor of ['branches', 'statements', 'functions']) {
+  for (const flavor of ['branches', 'statements', 'functions', 'lines']) {
     const pct = coverage.total[flavor]?.pct;
     const coveredItems = coverage.total[flavor]?.covered;
     const totalItems = coverage.total[flavor]?.total;
