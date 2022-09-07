@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import axios from 'axios';
 import * as assert from 'assert';
 import * as glob from 'glob';
+
 type Opts = {
   coverage: string;
   token: string;
