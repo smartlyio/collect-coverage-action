@@ -18861,7 +18861,7 @@ exports.run = run;
 async function publishCoverage(opts) {
     var _a, _b, _c;
     const coverage = JSON.parse(fs.readFileSync(opts.coverage, 'utf8'));
-    for (const flavor of ['branches', 'statements', 'functions']) {
+    for (const flavor of ['branches', 'statements', 'functions', 'lines']) {
         const pct = (_a = coverage.total[flavor]) === null || _a === void 0 ? void 0 : _a.pct;
         const coveredItems = (_b = coverage.total[flavor]) === null || _b === void 0 ? void 0 : _b.covered;
         const totalItems = (_c = coverage.total[flavor]) === null || _c === void 0 ? void 0 : _c.total;
