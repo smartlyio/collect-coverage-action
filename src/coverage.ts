@@ -39,7 +39,7 @@ async function publishCoverage(opts: Opts) {
     const coveredItems = coverage.total[flavor]?.covered;
     const totalItems = coverage.total[flavor]?.total;
 
-    if (pct != null && pct != "Unknown") {
+    if (pct != null && pct != 'Unknown') {
       if (opts.token) {
         const data = {
           project: opts.project,
