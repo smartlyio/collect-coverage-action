@@ -1,7 +1,8 @@
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import axios from 'axios';
 import * as assert from 'assert';
 import * as glob from 'glob';
+import { CoverageSummary, createCoverageMap, createCoverageSummary } from 'istanbul-lib-coverage';
 
 type Opts = {
   coverage: string;
@@ -10,7 +11,27 @@ type Opts = {
   tag: string;
   url: string;
   dryRun?: boolean;
+  coverageFormat: 'summary' | 'jest';
 };
+
+async function generateSummary(file: string): Promise<CoverageSummary> {
+  const map = createCoverageMap({});
+  const summary = createCoverageSummary();
+  map.merge(JSON.parse(await fs.readFile(file, { encoding: 'utf-8' })));
+  map.files().forEach(file => {
+    const fileCoverage = map.fileCoverageFor(file);
+    const fileSummary = fileCoverage.toSummary();
+    summary.merge(fileSummary);
+  });
+
+  return summary;
+}
+
+async function loadSummary(file: string): Promise<CoverageSummary> {
+  const summary = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
+  assert(summary.total, `Coverage file '${file}' is not a coverage summary file`);
+  return createCoverageSummary(summary.total);
+}
 
 function withSubPackage(pattern: string) {
   assert(!/\*.*\*/.test(pattern), `Only one * wildcard in the pattern is supported.`);
@@ -28,18 +49,24 @@ export async function run(opts: Opts) {
   const tagger = withSubPackage(opts.coverage);
   for (const file of glob.sync(opts.coverage)) {
     assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
-    await publishCoverage({ ...opts, coverage: file, project: tagger(opts.project, file) });
+    let summary: CoverageSummary;
+    if (opts.coverageFormat === 'summary') {
+      summary = await loadSummary(file);
+    } else {
+      summary = await generateSummary(file);
+    }
+
+    await publishCoverage({ ...opts, project: tagger(opts.project, file) }, summary);
   }
 }
 
-async function publishCoverage(opts: Opts) {
-  const coverage = JSON.parse(fs.readFileSync(opts.coverage, 'utf8'));
-  for (const flavor of ['branches', 'statements', 'functions', 'lines']) {
-    const pct = coverage.total[flavor]?.pct;
-    const coveredItems = coverage.total[flavor]?.covered;
-    const totalItems = coverage.total[flavor]?.total;
+async function publishCoverage(opts: Omit<Opts, 'coverage'>, coverage: CoverageSummary) {
+  for (const flavor of ['branches', 'statements', 'functions', 'lines'] as const) {
+    const pct = coverage[flavor].pct;
+    const coveredItems = coverage[flavor].covered;
+    const totalItems = coverage[flavor].total;
 
-    if (pct != null && pct != 'Unknown') {
+    if (pct != null && !Number.isNaN(pct)) {
       if (opts.token) {
         const data = {
           project: opts.project,

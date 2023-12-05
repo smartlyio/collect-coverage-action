@@ -3,19 +3,30 @@ import * as cov from './src/coverage';
 async function run() {
   await cov.run({
     dryRun: true,
-    coverage: 'test/packages/a/coverage/coverage.json',
+    coverage: 'test/summary/a/coverage/coverage.json',
     token: 'token',
     project: 'project',
     tag: 'pr-124',
-    url: 'https://example.com'
+    url: 'https://example.com',
+    coverageFormat: 'summary'
   });
   await cov.run({
     dryRun: true,
-    coverage: 'test/packages/*/coverage/coverage.json',
+    coverage: 'test/summary/*/coverage/coverage.json',
     token: 'token',
     project: 'project',
     tag: 'pr-123',
-    url: 'https://example.com'
+    url: 'https://example.com',
+    coverageFormat: 'summary'
+  });
+  await cov.run({
+    dryRun: true,
+    coverage: 'test/jest/c/coverage/coverage.json',
+    token: 'token',
+    project: 'project',
+    tag: 'pr-123',
+    url: 'https://example.com',
+    coverageFormat: 'jest'
   });
 }
 
