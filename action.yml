@@ -10,8 +10,8 @@ inputs:
   url:
     description: url to send the data to
     required: true
-  coverage-file-format:
-    description: Coverage file format (summary or full)
+  coverage-format:
+    description: Coverage file format (summary or istanbul)
     required: false
     default: full
 runs:

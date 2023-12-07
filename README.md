@@ -21,7 +21,7 @@ Where `packages/coverage/*/coverage.json` is a path to file or files produced by
 coverageReporters: ['json']
 ```
 
-or with `coverage-file-format: summary` option:
+or with `coverage-format: summary` option:
 
 ```
 coverageReporters: ['json-summary]

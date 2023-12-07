@@ -11,7 +11,7 @@ type Opts = {
   tag: string;
   url: string;
   dryRun?: boolean;
-  coverageFormat: 'summary' | 'jest';
+  coverageFormat: 'summary' | 'istanbul';
 };
 
 async function generateSummary(file: string): Promise<CoverageSummary> {
@@ -52,8 +52,10 @@ export async function run(opts: Opts) {
     let summary: CoverageSummary;
     if (opts.coverageFormat === 'summary') {
       summary = await loadSummary(file);
-    } else {
+    } else if (opts.coverageFormat === 'istanbul') {
       summary = await generateSummary(file);
+    } else {
+      throw new Error(`Unknown coverage format '${opts.coverageFormat}'`);
     }
 
     await publishCoverage({ ...opts, project: tagger(opts.project, file) }, summary);
