@@ -1,7 +1,6 @@
 import * as fs from 'fs/promises';
 import axios from 'axios';
 import * as assert from 'assert';
-import * as glob from 'glob';
 import { CoverageSummary, createCoverageMap, createCoverageSummary } from 'istanbul-lib-coverage';
 
 type Opts = {
@@ -33,33 +32,19 @@ async function loadSummary(file: string): Promise<CoverageSummary> {
   return createCoverageSummary(summary.total);
 }
 
-function withSubPackage(pattern: string) {
-  assert(!/\*.*\*/.test(pattern), `Only one * wildcard in the pattern is supported.`);
-  const packageNameAt = pattern.split('/').indexOf('*');
-  return (repo: string, path: string) => {
-    if (packageNameAt < 0) {
-      return repo;
-    }
-    const splitPath = path.split('/');
-    return `${repo}/${splitPath[packageNameAt]}`;
-  };
-}
-
 export async function run(opts: Opts) {
-  const tagger = withSubPackage(opts.coverage);
-  for (const file of glob.sync(opts.coverage)) {
-    assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
-    let summary: CoverageSummary;
-    if (opts.coverageFormat === 'summary') {
-      summary = await loadSummary(file);
-    } else if (opts.coverageFormat === 'istanbul') {
-      summary = await generateSummary(file);
-    } else {
-      throw new Error(`Unknown coverage format '${opts.coverageFormat}'`);
-    }
-
-    await publishCoverage({ ...opts, project: tagger(opts.project, file) }, summary);
+  const file = opts.coverage;
+  assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+  let summary: CoverageSummary;
+  if (opts.coverageFormat === 'summary') {
+    summary = await loadSummary(file);
+  } else if (opts.coverageFormat === 'istanbul') {
+    summary = await generateSummary(file);
+  } else {
+    throw new Error(`Unknown coverage format '${opts.coverageFormat}'`);
   }
+
+  await publishCoverage({ ...opts, project: opts.project }, summary);
 }
 
 async function publishCoverage(opts: Omit<Opts, 'coverage'>, coverage: CoverageSummary) {
