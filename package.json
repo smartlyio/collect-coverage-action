@@ -15,7 +15,6 @@
   "dependencies": {
     "@actions/core": "^1.2.6",
     "@actions/github": "^5.0.0",
-    "axios": "0.27.2",
     "istanbul-lib-coverage": "^3.2.2"
   },
   "devDependencies": {

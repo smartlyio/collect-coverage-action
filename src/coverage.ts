@@ -1,5 +1,4 @@
 import * as fs from 'fs/promises';
-import axios from 'axios';
 import * as assert from 'assert';
 import { CoverageSummary, createCoverageMap, createCoverageSummary } from 'istanbul-lib-coverage';
 
@@ -68,9 +67,15 @@ async function publishCoverage(opts: Omit<Opts, 'coverage'>, coverage: CoverageS
           console.log(data);
           continue;
         }
-        await axios.post(opts.url, data, {
-          headers: { Authorization: `Bearer ${opts.token}` }
+        const response = await fetch(opts.url, {
+          method: 'POST',
+          body: JSON.stringify(data),
+          headers: { Authorization: `Bearer ${opts.token}`, 'Content-Type': 'application/json' }
         });
+
+        if (!response.ok) {
+          throw new Error(`Failed to publish coverage: ${response.status} ${response.statusText}`);
+        }
       }
     }
   }
