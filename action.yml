@@ -10,6 +10,10 @@ inputs:
   url:
     description: url to send the data to
     required: true
+  coverage-file-format:
+    description: Coverage file format (summary or full)
+    required: false
+    default: full
 runs:
-  using: 'node16'
+  using: 'node20'
   main: 'dist/index.js'

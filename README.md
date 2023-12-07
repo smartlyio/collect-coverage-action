@@ -15,13 +15,19 @@ add following to your steps after the step running your test suite
         url: https://example.com/stats
 ```
 
-Where `packages/coverage/*/coverage.json` is  a wildcard path to files that have been produced by jest
-(if you can produce a similar file without jest that is fine also)
-with option. 
+Where `packages/coverage/*/coverage.json` is a path to file or files produced by Jest. Multiple files are supported with wildcard syntax and matching. The action assumes the input file or files to be produced by Jest using the folowing option:
 
 ```
-coverageReporters: ['json-summary']
+coverageReporters: ['json']
 ```
+
+or with `coverage-file-format: summary` option:
+
+```
+coverageReporters: ['json-summary]
+```
+If you can produce a similar file without jest that is fine also.
+
 
 With repo structure with the coverage files in 
 `packages/pkg/coverage/coverage.json` and `packages/other/coverage/coverage.json` this will 

@@ -14,7 +14,8 @@ async function run() {
     token: core.getInput(tokenArgument),
     tag: pr != null ? `pr-${pr}` : 'main',
     project: github.context.repo.repo,
-    url: core.getInput(urlArgument)
+    url: core.getInput(urlArgument),
+    coverageFormat: (core.getInput('coverage-file-format') ?? 'jest') as 'summary' | 'jest'
   });
 }
 

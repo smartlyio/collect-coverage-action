@@ -13393,6 +13393,835 @@ exports.isPlainObject = isPlainObject;
 
 /***/ }),
 
+/***/ 3896:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*
+ Copyright 2012-2015, Yahoo Inc.
+ Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+ */
+
+
+/**
+ * istanbul-lib-coverage exports an API that allows you to create and manipulate
+ * file coverage, coverage maps (a set of file coverage objects) and summary
+ * coverage objects. File coverage for the same file can be merged as can
+ * entire coverage maps.
+ *
+ * @module Exports
+ */
+const { FileCoverage } = __nccwpck_require__(8903);
+const { CoverageMap } = __nccwpck_require__(9770);
+const { CoverageSummary } = __nccwpck_require__(4904);
+
+module.exports = {
+    /**
+     * creates a coverage summary object
+     * @param {Object} obj an argument with the same semantics
+     *  as the one passed to the `CoverageSummary` constructor
+     * @returns {CoverageSummary}
+     */
+    createCoverageSummary(obj) {
+        if (obj && obj instanceof CoverageSummary) {
+            return obj;
+        }
+        return new CoverageSummary(obj);
+    },
+    /**
+     * creates a CoverageMap object
+     * @param {Object} obj optional - an argument with the same semantics
+     *  as the one passed to the CoverageMap constructor.
+     * @returns {CoverageMap}
+     */
+    createCoverageMap(obj) {
+        if (obj && obj instanceof CoverageMap) {
+            return obj;
+        }
+        return new CoverageMap(obj);
+    },
+    /**
+     * creates a FileCoverage object
+     * @param {Object} obj optional - an argument with the same semantics
+     *  as the one passed to the FileCoverage constructor.
+     * @returns {FileCoverage}
+     */
+    createFileCoverage(obj) {
+        if (obj && obj instanceof FileCoverage) {
+            return obj;
+        }
+        return new FileCoverage(obj);
+    }
+};
+
+/** classes exported for reuse */
+module.exports.classes = {
+    /**
+     * the file coverage constructor
+     */
+    FileCoverage
+};
+
+
+/***/ }),
+
+/***/ 9770:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*
+ Copyright 2012-2015, Yahoo Inc.
+ Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+ */
+
+
+const { FileCoverage } = __nccwpck_require__(8903);
+const { CoverageSummary } = __nccwpck_require__(4904);
+
+function maybeConstruct(obj, klass) {
+    if (obj instanceof klass) {
+        return obj;
+    }
+
+    return new klass(obj);
+}
+
+function loadMap(source) {
+    const data = Object.create(null);
+    if (!source) {
+        return data;
+    }
+
+    Object.entries(source).forEach(([k, cov]) => {
+        data[k] = maybeConstruct(cov, FileCoverage);
+    });
+
+    return data;
+}
+
+/** CoverageMap is a map of `FileCoverage` objects keyed by file paths. */
+class CoverageMap {
+    /**
+     * @constructor
+     * @param {Object} [obj=undefined] obj A coverage map from which to initialize this
+     * map's contents. This can be the raw global coverage object.
+     */
+    constructor(obj) {
+        if (obj instanceof CoverageMap) {
+            this.data = obj.data;
+        } else {
+            this.data = loadMap(obj);
+        }
+    }
+
+    /**
+     * merges a second coverage map into this one
+     * @param {CoverageMap} obj - a CoverageMap or its raw data. Coverage is merged
+     *  correctly for the same files and additional file coverage keys are created
+     *  as needed.
+     */
+    merge(obj) {
+        const other = maybeConstruct(obj, CoverageMap);
+        Object.values(other.data).forEach(fc => {
+            this.addFileCoverage(fc);
+        });
+    }
+
+    /**
+     * filter the coveragemap based on the callback provided
+     * @param {Function (filename)} callback - Returns true if the path
+     *  should be included in the coveragemap. False if it should be
+     *  removed.
+     */
+    filter(callback) {
+        Object.keys(this.data).forEach(k => {
+            if (!callback(k)) {
+                delete this.data[k];
+            }
+        });
+    }
+
+    /**
+     * returns a JSON-serializable POJO for this coverage map
+     * @returns {Object}
+     */
+    toJSON() {
+        return this.data;
+    }
+
+    /**
+     * returns an array for file paths for which this map has coverage
+     * @returns {Array{string}} - array of files
+     */
+    files() {
+        return Object.keys(this.data);
+    }
+
+    /**
+     * returns the file coverage for the specified file.
+     * @param {String} file
+     * @returns {FileCoverage}
+     */
+    fileCoverageFor(file) {
+        const fc = this.data[file];
+        if (!fc) {
+            throw new Error(`No file coverage available for: ${file}`);
+        }
+        return fc;
+    }
+
+    /**
+     * adds a file coverage object to this map. If the path for the object,
+     * already exists in the map, it is merged with the existing coverage
+     * otherwise a new key is added to the map.
+     * @param {FileCoverage} fc the file coverage to add
+     */
+    addFileCoverage(fc) {
+        const cov = new FileCoverage(fc);
+        const { path } = cov;
+        if (this.data[path]) {
+            this.data[path].merge(cov);
+        } else {
+            this.data[path] = cov;
+        }
+    }
+
+    /**
+     * returns the coverage summary for all the file coverage objects in this map.
+     * @returns {CoverageSummary}
+     */
+    getCoverageSummary() {
+        const ret = new CoverageSummary();
+        Object.values(this.data).forEach(fc => {
+            ret.merge(fc.toSummary());
+        });
+
+        return ret;
+    }
+}
+
+module.exports = {
+    CoverageMap
+};
+
+
+/***/ }),
+
+/***/ 4904:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*
+ Copyright 2012-2015, Yahoo Inc.
+ Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+ */
+
+
+const percent = __nccwpck_require__(683);
+const dataProperties = __nccwpck_require__(9960);
+
+function blankSummary() {
+    const empty = () => ({
+        total: 0,
+        covered: 0,
+        skipped: 0,
+        pct: 'Unknown'
+    });
+
+    return {
+        lines: empty(),
+        statements: empty(),
+        functions: empty(),
+        branches: empty(),
+        branchesTrue: empty()
+    };
+}
+
+// asserts that a data object "looks like" a summary coverage object
+function assertValidSummary(obj) {
+    const valid =
+        obj && obj.lines && obj.statements && obj.functions && obj.branches;
+    if (!valid) {
+        throw new Error(
+            'Invalid summary coverage object, missing keys, found:' +
+                Object.keys(obj).join(',')
+        );
+    }
+}
+
+/**
+ * CoverageSummary provides a summary of code coverage . It exposes 4 properties,
+ * `lines`, `statements`, `branches`, and `functions`. Each of these properties
+ * is an object that has 4 keys `total`, `covered`, `skipped` and `pct`.
+ * `pct` is a percentage number (0-100).
+ */
+class CoverageSummary {
+    /**
+     * @constructor
+     * @param {Object|CoverageSummary} [obj=undefined] an optional data object or
+     * another coverage summary to initialize this object with.
+     */
+    constructor(obj) {
+        if (!obj) {
+            this.data = blankSummary();
+        } else if (obj instanceof CoverageSummary) {
+            this.data = obj.data;
+        } else {
+            this.data = obj;
+        }
+        assertValidSummary(this.data);
+    }
+
+    /**
+     * merges a second summary coverage object into this one
+     * @param {CoverageSummary} obj - another coverage summary object
+     */
+    merge(obj) {
+        const keys = [
+            'lines',
+            'statements',
+            'branches',
+            'functions',
+            'branchesTrue'
+        ];
+        keys.forEach(key => {
+            if (obj[key]) {
+                this[key].total += obj[key].total;
+                this[key].covered += obj[key].covered;
+                this[key].skipped += obj[key].skipped;
+                this[key].pct = percent(this[key].covered, this[key].total);
+            }
+        });
+
+        return this;
+    }
+
+    /**
+     * returns a POJO that is JSON serializable. May be used to get the raw
+     * summary object.
+     */
+    toJSON() {
+        return this.data;
+    }
+
+    /**
+     * return true if summary has no lines of code
+     */
+    isEmpty() {
+        return this.lines.total === 0;
+    }
+}
+
+dataProperties(CoverageSummary, [
+    'lines',
+    'statements',
+    'functions',
+    'branches',
+    'branchesTrue'
+]);
+
+module.exports = {
+    CoverageSummary
+};
+
+
+/***/ }),
+
+/***/ 9960:
+/***/ ((module) => {
+
+"use strict";
+
+
+module.exports = function dataProperties(klass, properties) {
+    properties.forEach(p => {
+        Object.defineProperty(klass.prototype, p, {
+            enumerable: true,
+            get() {
+                return this.data[p];
+            }
+        });
+    });
+};
+
+
+/***/ }),
+
+/***/ 8903:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+"use strict";
+/*
+ Copyright 2012-2015, Yahoo Inc.
+ Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+ */
+
+
+const percent = __nccwpck_require__(683);
+const dataProperties = __nccwpck_require__(9960);
+const { CoverageSummary } = __nccwpck_require__(4904);
+
+// returns a data object that represents empty coverage
+function emptyCoverage(filePath, reportLogic) {
+    const cov = {
+        path: filePath,
+        statementMap: {},
+        fnMap: {},
+        branchMap: {},
+        s: {},
+        f: {},
+        b: {}
+    };
+    if (reportLogic) cov.bT = {};
+    return cov;
+}
+
+// asserts that a data object "looks like" a coverage object
+function assertValidObject(obj) {
+    const valid =
+        obj &&
+        obj.path &&
+        obj.statementMap &&
+        obj.fnMap &&
+        obj.branchMap &&
+        obj.s &&
+        obj.f &&
+        obj.b;
+    if (!valid) {
+        throw new Error(
+            'Invalid file coverage object, missing keys, found:' +
+                Object.keys(obj).join(',')
+        );
+    }
+}
+
+const keyFromLoc = ({ start, end }) =>
+    `${start.line}|${start.column}|${end.line}|${end.column}`;
+
+const isObj = o => !!o && typeof o === 'object';
+const isLineCol = o =>
+    isObj(o) && typeof o.line === 'number' && typeof o.column === 'number';
+const isLoc = o => isObj(o) && isLineCol(o.start) && isLineCol(o.end);
+const getLoc = o => (isLoc(o) ? o : isLoc(o.loc) ? o.loc : null);
+
+// When merging, we can have a case where two ranges cover
+// the same block of code with `hits=1`, and each carve out a
+// different range with `hits=0` to indicate it's uncovered.
+// Find the nearest container so that we can properly indicate
+// that both sections are hit.
+// Returns null if no containing item is found.
+const findNearestContainer = (item, map) => {
+    const itemLoc = getLoc(item);
+    if (!itemLoc) return null;
+    // the B item is not an identified range in the A set, BUT
+    // it may be contained by an identified A range. If so, then
+    // any hit of that containing A range counts as a hit of this
+    // B range as well. We have to find the *narrowest* containing
+    // range to be accurate, since ranges can be hit and un-hit
+    // in a nested fashion.
+    let nearestContainingItem = null;
+    let containerDistance = null;
+    let containerKey = null;
+    for (const [i, mapItem] of Object.entries(map)) {
+        const mapLoc = getLoc(mapItem);
+        if (!mapLoc) continue;
+        // contained if all of line distances are > 0
+        // or line distance is 0 and col dist is >= 0
+        const distance = [
+            itemLoc.start.line - mapLoc.start.line,
+            itemLoc.start.column - mapLoc.start.column,
+            mapLoc.end.line - itemLoc.end.line,
+            mapLoc.end.column - itemLoc.end.column
+        ];
+        if (
+            distance[0] < 0 ||
+            distance[2] < 0 ||
+            (distance[0] === 0 && distance[1] < 0) ||
+            (distance[2] === 0 && distance[3] < 0)
+        ) {
+            continue;
+        }
+        if (nearestContainingItem === null) {
+            containerDistance = distance;
+            nearestContainingItem = mapItem;
+            containerKey = i;
+            continue;
+        }
+        // closer line more relevant than closer column
+        const closerBefore =
+            distance[0] < containerDistance[0] ||
+            (distance[0] === 0 && distance[1] < containerDistance[1]);
+        const closerAfter =
+            distance[2] < containerDistance[2] ||
+            (distance[2] === 0 && distance[3] < containerDistance[3]);
+        if (closerBefore || closerAfter) {
+            // closer
+            containerDistance = distance;
+            nearestContainingItem = mapItem;
+            containerKey = i;
+        }
+    }
+    return containerKey;
+};
+
+// either add two numbers, or all matching entries in a number[]
+const addHits = (aHits, bHits) => {
+    if (typeof aHits === 'number' && typeof bHits === 'number') {
+        return aHits + bHits;
+    } else if (Array.isArray(aHits) && Array.isArray(bHits)) {
+        return aHits.map((a, i) => (a || 0) + (bHits[i] || 0));
+    }
+    return null;
+};
+
+const addNearestContainerHits = (item, itemHits, map, mapHits) => {
+    const container = findNearestContainer(item, map);
+    if (container) {
+        return addHits(itemHits, mapHits[container]);
+    } else {
+        return itemHits;
+    }
+};
+
+const mergeProp = (aHits, aMap, bHits, bMap, itemKey = keyFromLoc) => {
+    const aItems = {};
+    for (const [key, itemHits] of Object.entries(aHits)) {
+        const item = aMap[key];
+        aItems[itemKey(item)] = [itemHits, item];
+    }
+    const bItems = {};
+    for (const [key, itemHits] of Object.entries(bHits)) {
+        const item = bMap[key];
+        bItems[itemKey(item)] = [itemHits, item];
+    }
+    const mergedItems = {};
+    for (const [key, aValue] of Object.entries(aItems)) {
+        let aItemHits = aValue[0];
+        const aItem = aValue[1];
+        const bValue = bItems[key];
+        if (!bValue) {
+            // not an identified range in b, but might be contained by one
+            aItemHits = addNearestContainerHits(aItem, aItemHits, bMap, bHits);
+        } else {
+            // is an identified range in b, so add the hits together
+            aItemHits = addHits(aItemHits, bValue[0]);
+        }
+        mergedItems[key] = [aItemHits, aItem];
+    }
+    // now find the items in b that are not in a. already added matches.
+    for (const [key, bValue] of Object.entries(bItems)) {
+        let bItemHits = bValue[0];
+        const bItem = bValue[1];
+        if (mergedItems[key]) continue;
+        // not an identified range in b, but might be contained by one
+        bItemHits = addNearestContainerHits(bItem, bItemHits, aMap, aHits);
+        mergedItems[key] = [bItemHits, bItem];
+    }
+
+    const hits = {};
+    const map = {};
+
+    Object.values(mergedItems).forEach(([itemHits, item], i) => {
+        hits[i] = itemHits;
+        map[i] = item;
+    });
+
+    return [hits, map];
+};
+
+/**
+ * provides a read-only view of coverage for a single file.
+ * The deep structure of this object is documented elsewhere. It has the following
+ * properties:
+ *
+ * * `path` - the file path for which coverage is being tracked
+ * * `statementMap` - map of statement locations keyed by statement index
+ * * `fnMap` - map of function metadata keyed by function index
+ * * `branchMap` - map of branch metadata keyed by branch index
+ * * `s` - hit counts for statements
+ * * `f` - hit count for functions
+ * * `b` - hit count for branches
+ */
+class FileCoverage {
+    /**
+     * @constructor
+     * @param {Object|FileCoverage|String} pathOrObj is a string that initializes
+     * and empty coverage object with the specified file path or a data object that
+     * has all the required properties for a file coverage object.
+     */
+    constructor(pathOrObj, reportLogic = false) {
+        if (!pathOrObj) {
+            throw new Error(
+                'Coverage must be initialized with a path or an object'
+            );
+        }
+        if (typeof pathOrObj === 'string') {
+            this.data = emptyCoverage(pathOrObj, reportLogic);
+        } else if (pathOrObj instanceof FileCoverage) {
+            this.data = pathOrObj.data;
+        } else if (typeof pathOrObj === 'object') {
+            this.data = pathOrObj;
+        } else {
+            throw new Error('Invalid argument to coverage constructor');
+        }
+        assertValidObject(this.data);
+    }
+
+    /**
+     * returns computed line coverage from statement coverage.
+     * This is a map of hits keyed by line number in the source.
+     */
+    getLineCoverage() {
+        const statementMap = this.data.statementMap;
+        const statements = this.data.s;
+        const lineMap = Object.create(null);
+
+        Object.entries(statements).forEach(([st, count]) => {
+            /* istanbul ignore if: is this even possible? */
+            if (!statementMap[st]) {
+                return;
+            }
+            const { line } = statementMap[st].start;
+            const prevVal = lineMap[line];
+            if (prevVal === undefined || prevVal < count) {
+                lineMap[line] = count;
+            }
+        });
+        return lineMap;
+    }
+
+    /**
+     * returns an array of uncovered line numbers.
+     * @returns {Array} an array of line numbers for which no hits have been
+     *  collected.
+     */
+    getUncoveredLines() {
+        const lc = this.getLineCoverage();
+        const ret = [];
+        Object.entries(lc).forEach(([l, hits]) => {
+            if (hits === 0) {
+                ret.push(l);
+            }
+        });
+        return ret;
+    }
+
+    /**
+     * returns a map of branch coverage by source line number.
+     * @returns {Object} an object keyed by line number. Each object
+     * has a `covered`, `total` and `coverage` (percentage) property.
+     */
+    getBranchCoverageByLine() {
+        const branchMap = this.branchMap;
+        const branches = this.b;
+        const ret = {};
+        Object.entries(branchMap).forEach(([k, map]) => {
+            const line = map.line || map.loc.start.line;
+            const branchData = branches[k];
+            ret[line] = ret[line] || [];
+            ret[line].push(...branchData);
+        });
+        Object.entries(ret).forEach(([k, dataArray]) => {
+            const covered = dataArray.filter(item => item > 0);
+            const coverage = (covered.length / dataArray.length) * 100;
+            ret[k] = {
+                covered: covered.length,
+                total: dataArray.length,
+                coverage
+            };
+        });
+        return ret;
+    }
+
+    /**
+     * return a JSON-serializable POJO for this file coverage object
+     */
+    toJSON() {
+        return this.data;
+    }
+
+    /**
+     * merges a second coverage object into this one, updating hit counts
+     * @param {FileCoverage} other - the coverage object to be merged into this one.
+     *  Note that the other object should have the same structure as this one (same file).
+     */
+    merge(other) {
+        if (other.all === true) {
+            return;
+        }
+
+        if (this.all === true) {
+            this.data = other.data;
+            return;
+        }
+
+        let [hits, map] = mergeProp(
+            this.s,
+            this.statementMap,
+            other.s,
+            other.statementMap
+        );
+        this.data.s = hits;
+        this.data.statementMap = map;
+
+        const keyFromLocProp = x => keyFromLoc(x.loc);
+        const keyFromLocationsProp = x => keyFromLoc(x.locations[0]);
+
+        [hits, map] = mergeProp(
+            this.f,
+            this.fnMap,
+            other.f,
+            other.fnMap,
+            keyFromLocProp
+        );
+        this.data.f = hits;
+        this.data.fnMap = map;
+
+        [hits, map] = mergeProp(
+            this.b,
+            this.branchMap,
+            other.b,
+            other.branchMap,
+            keyFromLocationsProp
+        );
+        this.data.b = hits;
+        this.data.branchMap = map;
+
+        // Tracking additional information about branch truthiness
+        // can be optionally enabled:
+        if (this.bT && other.bT) {
+            [hits, map] = mergeProp(
+                this.bT,
+                this.branchMap,
+                other.bT,
+                other.branchMap,
+                keyFromLocationsProp
+            );
+            this.data.bT = hits;
+        }
+    }
+
+    computeSimpleTotals(property) {
+        let stats = this[property];
+
+        if (typeof stats === 'function') {
+            stats = stats.call(this);
+        }
+
+        const ret = {
+            total: Object.keys(stats).length,
+            covered: Object.values(stats).filter(v => !!v).length,
+            skipped: 0
+        };
+        ret.pct = percent(ret.covered, ret.total);
+        return ret;
+    }
+
+    computeBranchTotals(property) {
+        const stats = this[property];
+        const ret = { total: 0, covered: 0, skipped: 0 };
+
+        Object.values(stats).forEach(branches => {
+            ret.covered += branches.filter(hits => hits > 0).length;
+            ret.total += branches.length;
+        });
+        ret.pct = percent(ret.covered, ret.total);
+        return ret;
+    }
+
+    /**
+     * resets hit counts for all statements, functions and branches
+     * in this coverage object resulting in zero coverage.
+     */
+    resetHits() {
+        const statements = this.s;
+        const functions = this.f;
+        const branches = this.b;
+        const branchesTrue = this.bT;
+        Object.keys(statements).forEach(s => {
+            statements[s] = 0;
+        });
+        Object.keys(functions).forEach(f => {
+            functions[f] = 0;
+        });
+        Object.keys(branches).forEach(b => {
+            branches[b].fill(0);
+        });
+        // Tracking additional information about branch truthiness
+        // can be optionally enabled:
+        if (branchesTrue) {
+            Object.keys(branchesTrue).forEach(bT => {
+                branchesTrue[bT].fill(0);
+            });
+        }
+    }
+
+    /**
+     * returns a CoverageSummary for this file coverage object
+     * @returns {CoverageSummary}
+     */
+    toSummary() {
+        const ret = {};
+        ret.lines = this.computeSimpleTotals('getLineCoverage');
+        ret.functions = this.computeSimpleTotals('f', 'fnMap');
+        ret.statements = this.computeSimpleTotals('s', 'statementMap');
+        ret.branches = this.computeBranchTotals('b');
+        // Tracking additional information about branch truthiness
+        // can be optionally enabled:
+        if (this.bT) {
+            ret.branchesTrue = this.computeBranchTotals('bT');
+        }
+        return new CoverageSummary(ret);
+    }
+}
+
+// expose coverage data attributes
+dataProperties(FileCoverage, [
+    'path',
+    'statementMap',
+    'fnMap',
+    'branchMap',
+    's',
+    'f',
+    'b',
+    'bT',
+    'all'
+]);
+
+module.exports = {
+    FileCoverage,
+    // exported for testing
+    findNearestContainer,
+    addHits,
+    addNearestContainerHits
+};
+
+
+/***/ }),
+
+/***/ 683:
+/***/ ((module) => {
+
+"use strict";
+/*
+ Copyright 2012-2015, Yahoo Inc.
+ Copyrights licensed under the New BSD License. See the accompanying LICENSE file for terms.
+ */
+
+
+module.exports = function percent(covered, total) {
+    let tmp;
+    if (total > 0) {
+        tmp = (1000 * 100 * covered) / total;
+        return Math.floor(tmp / 10) / 100;
+    } else {
+        return 100.0;
+    }
+};
+
+
+/***/ }),
+
 /***/ 7426:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -18835,10 +19664,27 @@ function wrappy (fn, cb) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = void 0;
-const fs = __nccwpck_require__(7147);
+const fs = __nccwpck_require__(3292);
 const axios_1 = __nccwpck_require__(6545);
 const assert = __nccwpck_require__(9491);
 const glob = __nccwpck_require__(1957);
+const istanbul_lib_coverage_1 = __nccwpck_require__(3896);
+async function generateSummary(file) {
+    const map = (0, istanbul_lib_coverage_1.createCoverageMap)({});
+    const summary = (0, istanbul_lib_coverage_1.createCoverageSummary)();
+    map.merge(JSON.parse(await fs.readFile(file, { encoding: 'utf-8' })));
+    map.files().forEach(file => {
+        const fileCoverage = map.fileCoverageFor(file);
+        const fileSummary = fileCoverage.toSummary();
+        summary.merge(fileSummary);
+    });
+    return summary;
+}
+async function loadSummary(file) {
+    const summary = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
+    assert(summary.total, `Coverage file '${file}' is not a coverage summary file`);
+    return (0, istanbul_lib_coverage_1.createCoverageSummary)(summary.total);
+}
 function withSubPackage(pattern) {
     assert(!/\*.*\*/.test(pattern), `Only one * wildcard in the pattern is supported.`);
     const packageNameAt = pattern.split('/').indexOf('*');
@@ -18854,18 +19700,23 @@ async function run(opts) {
     const tagger = withSubPackage(opts.coverage);
     for (const file of glob.sync(opts.coverage)) {
         assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
-        await publishCoverage(Object.assign(Object.assign({}, opts), { coverage: file, project: tagger(opts.project, file) }));
+        let summary;
+        if (opts.coverageFormat === 'summary') {
+            summary = await loadSummary(file);
+        }
+        else {
+            summary = await generateSummary(file);
+        }
+        await publishCoverage(Object.assign(Object.assign({}, opts), { project: tagger(opts.project, file) }), summary);
     }
 }
 exports.run = run;
-async function publishCoverage(opts) {
-    var _a, _b, _c;
-    const coverage = JSON.parse(fs.readFileSync(opts.coverage, 'utf8'));
+async function publishCoverage(opts, coverage) {
     for (const flavor of ['branches', 'statements', 'functions', 'lines']) {
-        const pct = (_a = coverage.total[flavor]) === null || _a === void 0 ? void 0 : _a.pct;
-        const coveredItems = (_b = coverage.total[flavor]) === null || _b === void 0 ? void 0 : _b.covered;
-        const totalItems = (_c = coverage.total[flavor]) === null || _c === void 0 ? void 0 : _c.total;
-        if (pct != null && pct != 'Unknown') {
+        const pct = coverage[flavor].pct;
+        const coveredItems = coverage[flavor].covered;
+        const totalItems = coverage[flavor].total;
+        if (pct != null && !Number.isNaN(pct)) {
             if (opts.token) {
                 const data = {
                     project: opts.project,
@@ -18928,6 +19779,14 @@ module.exports = require("events");
 
 "use strict";
 module.exports = require("fs");
+
+/***/ }),
+
+/***/ 3292:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("fs/promises");
 
 /***/ }),
 
@@ -19095,7 +19954,7 @@ const tokenArgument = 'authorization-token';
 const coverageFileArgument = 'coverage-file';
 const urlArgument = 'url';
 async function run() {
-    var _a;
+    var _a, _b;
     const pr = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.number;
     const coverageFile = core.getInput(coverageFileArgument);
     await coverage.run({
@@ -19103,7 +19962,8 @@ async function run() {
         token: core.getInput(tokenArgument),
         tag: pr != null ? `pr-${pr}` : 'main',
         project: github.context.repo.repo,
-        url: core.getInput(urlArgument)
+        url: core.getInput(urlArgument),
+        coverageFormat: ((_b = core.getInput('coverage-file-format')) !== null && _b !== void 0 ? _b : 'jest')
     });
 }
 void run();
