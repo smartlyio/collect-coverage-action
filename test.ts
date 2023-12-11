@@ -12,15 +12,6 @@ async function run() {
   });
   await cov.run({
     dryRun: true,
-    coverage: 'test/summary/*/coverage/coverage.json',
-    token: 'token',
-    project: 'project',
-    tag: 'pr-123',
-    url: 'https://example.com',
-    coverageFormat: 'summary'
-  });
-  await cov.run({
-    dryRun: true,
     coverage: 'test/jest/c/coverage/coverage.json',
     token: 'token',
     project: 'project',
