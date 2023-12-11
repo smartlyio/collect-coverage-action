@@ -26,7 +26,7 @@ async function run() {
     project: 'project',
     tag: 'pr-123',
     url: 'https://example.com',
-    coverageFormat: 'jest'
+    coverageFormat: 'istanbul'
   });
 }
 

@@ -15,7 +15,7 @@ async function run() {
     tag: pr != null ? `pr-${pr}` : 'main',
     project: github.context.repo.repo,
     url: core.getInput(urlArgument),
-    coverageFormat: (core.getInput('coverage-file-format') ?? 'jest') as 'summary' | 'jest'
+    coverageFormat: (core.getInput('coverage-format') ?? 'jest') as 'summary' | 'istanbul'
   });
 }
 
