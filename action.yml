@@ -13,7 +13,7 @@ inputs:
   coverage-format:
     description: Coverage file format (summary or istanbul)
     required: false
-    default: full
+    default: istanbul
 runs:
   using: 'node20'
   main: 'dist/index.js'
