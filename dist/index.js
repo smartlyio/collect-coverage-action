@@ -10365,7 +10365,7 @@ async function publishCoverage(opts, coverage) {
         const pct = coverage[flavor].pct;
         const coveredItems = coverage[flavor].covered;
         const totalItems = coverage[flavor].total;
-        if (pct != null && !Number.isNaN(pct)) {
+        if (Number.isFinite(pct)) {
             if (opts.token) {
                 const data = {
                     project: opts.project,
