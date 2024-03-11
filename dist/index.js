@@ -10338,9 +10338,11 @@ async function generateSummary(file) {
     return summary;
 }
 async function loadSummary(file) {
-    const summary = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
-    assert(summary.total, `Coverage file '${file}' is not a coverage summary file`);
-    return (0, istanbul_lib_coverage_1.createCoverageSummary)(summary.total);
+    const data = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
+    assert(data.total, `Coverage file '${file}' is not a coverage summary file`);
+    const summary = (0, istanbul_lib_coverage_1.createCoverageSummary)();
+    summary.merge(data.total);
+    return summary;
 }
 async function run(opts) {
     const file = opts.coverage;
@@ -10599,7 +10601,7 @@ async function run() {
         tag: pr != null ? `pr-${pr}` : 'main',
         project: github.context.repo.repo,
         url: core.getInput(urlArgument),
-        coverageFormat: ((_b = core.getInput('coverage-format')) !== null && _b !== void 0 ? _b : 'jest')
+        coverageFormat: ((_b = core.getInput('coverage-format')) !== null && _b !== void 0 ? _b : 'istanbul')
     });
 }
 void run();

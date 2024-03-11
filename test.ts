@@ -19,6 +19,15 @@ async function run() {
     url: 'https://example.com',
     coverageFormat: 'istanbul'
   });
+  await cov.run({
+    dryRun: true,
+    coverage: 'test/lcov-summary/coverage.json',
+    token: 'token',
+    project: 'project',
+    tag: 'pr-123',
+    url: 'https://example.com',
+    coverageFormat: 'summary'
+  });
 }
 
 void run();
