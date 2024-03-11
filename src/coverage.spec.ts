@@ -73,6 +73,39 @@ describe('coverage', () => {
     mockAgent.assertNoPendingInterceptors();
   });
 
+  it("generates coverage for 'lcov' format", async () => {
+    const data: Record<string, number> = {};
+    mockClient
+      .intercept({
+        method: 'POST',
+        path: '/',
+        headers: {
+          authorization: `Bearer token`
+        },
+        body(json) {
+          const payload = JSON.parse(json);
+          data[payload.flavor] = payload.value;
+          return true;
+        }
+      })
+      .reply(200, {})
+      .persist();
+    await coverage.run({
+      coverage: 'test/lcov.info',
+      token: 'token',
+      project: 'project',
+      tag: 'pr-123',
+      url: 'https://example.com',
+      coverageFormat: 'lcov'
+    });
+    expect(data).toEqual({
+      branches: 62.5,
+      functions: 100,
+      lines: 89.47368421052632
+    });
+    mockAgent.assertNoPendingInterceptors();
+  });
+
   it("only sends 'summary' coverage for existing fields", async () => {
     let calls = 0;
     mockClient

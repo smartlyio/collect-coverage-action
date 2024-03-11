@@ -11,7 +11,7 @@ inputs:
     description: url to send the data to
     required: true
   coverage-format:
-    description: Coverage file format (summary or istanbul)
+    description: Coverage file format (summary, lcov or istanbul)
     required: false
     default: istanbul
   dry-run:
