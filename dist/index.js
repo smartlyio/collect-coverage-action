@@ -10601,7 +10601,7 @@ async function run() {
         tag: pr != null ? `pr-${pr}` : 'main',
         project: github.context.repo.repo,
         url: core.getInput(urlArgument),
-        coverageFormat: ((_b = core.getInput('coverage-format')) !== null && _b !== void 0 ? _b : 'jest')
+        coverageFormat: ((_b = core.getInput('coverage-format')) !== null && _b !== void 0 ? _b : 'istanbul')
     });
 }
 void run();
