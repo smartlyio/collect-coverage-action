@@ -14,6 +14,10 @@ inputs:
     description: Coverage file format (summary or istanbul)
     required: false
     default: istanbul
+  dry-run:
+    description: Dry run mode
+    required: false
+    default: 'false'
 runs:
   using: 'node20'
   main: 'dist/index.js'
