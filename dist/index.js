@@ -28809,6 +28809,205 @@ function onceStrict (fn) {
 
 /***/ }),
 
+/***/ 6508:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+exports.__esModule = true;
+exports["default"] = parseLCOV;
+
+var _line = __nccwpck_require__(9057);
+
+var _record = __nccwpck_require__(2010);
+
+exports.LCOVRecord = _record.LCOVRecord;
+exports.FunctionsDetails = _record.FunctionsDetails;
+exports.BranchesDetails = _record.BranchesDetails;
+exports.LinesDetails = _record.LinesDetails;
+
+var _transform = __nccwpck_require__(3225);
+
+function _extends() { _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
+
+function parseLCOV(string) {
+  if (string === void 0) {
+    string = "";
+  }
+
+  var lines = string.split("\n");
+  var record = (0, _record.newRecord)();
+  return lines.reduce(function (retval, line) {
+    if ((0, _line.isEnd)(line)) {
+      retval.push(_extends({}, record));
+      record = (0, _record.newRecord)();
+    } else {
+      var _parseLine = (0, _line.parseLine)(line),
+          type = _parseLine.type,
+          data = _parseLine.data;
+
+      (0, _transform.transform)(record, type, data);
+    }
+
+    return retval;
+  }, []);
+}
+
+/***/ }),
+
+/***/ 9057:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+exports.__esModule = true;
+exports.isLineType = isLineType;
+exports.isEnd = isEnd;
+exports.parseLine = parseLine;
+var linesTypes = ["TN", "SF", "FN", "FNDA", "FNF", "FNH", "BRDA", "BRF", "BRH", "DA", "LF", "LH"];
+
+function isLineType(string) {
+  return linesTypes.includes(string);
+}
+
+function isEnd(string) {
+  return string === "end_of_record";
+}
+
+function parseLine(line) {
+  var _line$split = line.split(":"),
+      type = _line$split[0],
+      data = _line$split[1];
+
+  return {
+    type: isLineType(type) ? type : undefined,
+    data: (data != null ? data : "").split(",")
+  };
+}
+
+/***/ }),
+
+/***/ 2010:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+exports.__esModule = true;
+exports.newRecord = newRecord;
+
+function newRecord() {
+  return {
+    title: "",
+    file: "",
+    functions: {
+      found: 0,
+      hit: 0,
+      details: []
+    },
+    branches: {
+      found: 0,
+      hit: 0,
+      details: []
+    },
+    lines: {
+      found: 0,
+      hit: 0,
+      details: []
+    }
+  };
+}
+
+/***/ }),
+
+/***/ 3225:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+
+exports.__esModule = true;
+exports.transform = transform;
+var transformers = {
+  TN: function TN(record, data) {
+    record.title = data[0];
+  },
+  SF: function SF(record, data) {
+    record.file = data[0];
+  },
+  // Functions
+  FNF: function FNF(record, data) {
+    record.functions.found = parseInt(data[0]);
+  },
+  FNH: function FNH(record, data) {
+    record.functions.hit = parseInt(data[0]);
+  },
+  FN: function FN(record, data) {
+    var line = data[0],
+        name = data[1];
+    record.functions.details.push({
+      name: name,
+      line: parseInt(line)
+    });
+  },
+  FNDA: function FNDA(record, data) {
+    var hit = data[0],
+        name = data[1];
+    record.functions.details.some(function (item) {
+      if (item.name === name && item.hit === undefined) {
+        item.hit = parseInt(hit);
+        return true;
+      } else {
+        return undefined;
+      }
+    });
+  },
+  // Branches
+  BRF: function BRF(record, data) {
+    record.branches.found = parseInt(data[0]);
+  },
+  BRH: function BRH(record, data) {
+    record.branches.hit = parseInt(data[0]);
+  },
+  BRDA: function BRDA(record, data) {
+    var line = data[0],
+        block = data[1],
+        branch = data[2],
+        taken = data[3];
+    record.branches.details.push({
+      line: parseInt(line),
+      block: parseInt(block),
+      branch: parseInt(branch),
+      taken: taken === "-" ? 0 : parseInt(taken)
+    });
+  },
+  // Lines
+  LF: function LF(record, data) {
+    record.lines.found = parseInt(data[0]);
+  },
+  LH: function LH(record, data) {
+    record.lines.hit = parseInt(data[0]);
+  },
+  DA: function DA(record, data) {
+    var line = data[0],
+        hit = data[1];
+    record.lines.details.push({
+      line: parseInt(line),
+      hit: parseInt(hit)
+    });
+  }
+};
+
+function transform(record, lineType, data) {
+  if (lineType) {
+    transformers[lineType](record, data);
+  }
+}
+
+/***/ }),
+
 /***/ 4294:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -54706,6 +54905,7 @@ exports.run = void 0;
 const fs = __nccwpck_require__(3292);
 const assert = __nccwpck_require__(9491);
 const istanbul_lib_coverage_1 = __nccwpck_require__(3896);
+const parse_lcov_1 = __nccwpck_require__(6508);
 async function generateSummary(file) {
     const map = (0, istanbul_lib_coverage_1.createCoverageMap)({});
     const summary = (0, istanbul_lib_coverage_1.createCoverageSummary)();
@@ -54717,6 +54917,28 @@ async function generateSummary(file) {
     });
     return summary;
 }
+async function loadLCOV(file) {
+    const flavors = ['branches', 'functions', 'lines'];
+    const map = (0, parse_lcov_1.default)(await fs.readFile(file, { encoding: 'utf-8' }));
+    const data = {
+        lines: { total: 0, covered: 0, skipped: 0, pct: 0 },
+        statements: { total: 0, covered: 0, skipped: 0, pct: NaN },
+        branches: { total: 0, covered: 0, skipped: 0, pct: 0 },
+        functions: { total: 0, covered: 0, skipped: 0, pct: 0 }
+    };
+    for (const file of map) {
+        flavors.forEach(flavor => {
+            var _a, _b;
+            data[flavor].total += (_a = file[flavor].found) !== null && _a !== void 0 ? _a : 0;
+            data[flavor].covered += (_b = file[flavor].hit) !== null && _b !== void 0 ? _b : 0;
+        });
+    }
+    flavors.forEach(flavor => {
+        data[flavor].pct =
+            data[flavor].total === 0 ? 100 : (data[flavor].covered / data[flavor].total) * 100;
+    });
+    return (0, istanbul_lib_coverage_1.createCoverageSummary)(data);
+}
 async function loadSummary(file) {
     const data = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
     assert(data.total, `Coverage file '${file}' is not a coverage summary file`);
@@ -54726,13 +54948,17 @@ async function loadSummary(file) {
 }
 async function run(opts) {
     const file = opts.coverage;
-    assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
     let summary;
     if (opts.coverageFormat === 'summary') {
+        assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
         summary = await loadSummary(file);
     }
     else if (opts.coverageFormat === 'istanbul') {
+        assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
         summary = await generateSummary(file);
+    }
+    else if (opts.coverageFormat === 'lcov') {
+        summary = await loadLCOV(file);
     }
     else {
         throw new Error(`Unknown coverage format '${opts.coverageFormat}'`);
