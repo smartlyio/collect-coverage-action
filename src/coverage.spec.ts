@@ -106,6 +106,38 @@ describe('coverage', () => {
     mockAgent.assertNoPendingInterceptors();
   });
 
+  it("generates coverage for 'cobertura' format", async () => {
+    const data: Record<string, number> = {};
+    mockClient
+      .intercept({
+        method: 'POST',
+        path: '/',
+        headers: {
+          authorization: `Bearer token`
+        },
+        body(json) {
+          const payload = JSON.parse(json);
+          data[payload.flavor] = payload.value;
+          return true;
+        }
+      })
+      .reply(200, {})
+      .persist();
+    await coverage.run({
+      coverage: 'test/cobertura.xml',
+      token: 'token',
+      project: 'project',
+      tag: 'pr-123',
+      url: 'https://example.com',
+      coverageFormat: 'cobertura'
+    });
+    expect(data).toEqual({
+      branches: 73.91,
+      lines: 93.44
+    });
+    mockAgent.assertNoPendingInterceptors();
+  });
+
   it("only sends 'summary' coverage for existing fields", async () => {
     let calls = 0;
     mockClient
