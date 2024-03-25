@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import * as assert from 'assert';
+import assert from 'node:assert';
 import { default as libCoverage } from 'istanbul-lib-coverage';
 import lcovParser, { SectionSummary } from '@friedemannsommer/lcov-parser';
 import { XMLParser } from 'fast-xml-parser';
