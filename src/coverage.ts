@@ -1,11 +1,6 @@
 import * as fs from 'fs/promises';
 import * as assert from 'assert';
-import {
-  CoverageSummary,
-  CoverageSummaryData,
-  createCoverageMap,
-  createCoverageSummary
-} from 'istanbul-lib-coverage';
+import { default as libCoverage } from 'istanbul-lib-coverage';
 import lcovParser, { SectionSummary } from '@friedemannsommer/lcov-parser';
 import { XMLParser } from 'fast-xml-parser';
 
@@ -19,9 +14,9 @@ type Opts = {
   coverageFormat: 'summary' | 'istanbul' | 'lcov' | 'cobertura';
 };
 
-async function generateSummary(file: string): Promise<CoverageSummary> {
-  const map = createCoverageMap({});
-  const summary = createCoverageSummary();
+async function generateSummary(file: string): Promise<libCoverage.CoverageSummary> {
+  const map = libCoverage.createCoverageMap({});
+  const summary = libCoverage.createCoverageSummary();
   map.merge(JSON.parse(await fs.readFile(file, { encoding: 'utf-8' })));
   map.files().forEach(file => {
     const fileCoverage = map.fileCoverageFor(file);
@@ -32,9 +27,9 @@ async function generateSummary(file: string): Promise<CoverageSummary> {
   return summary;
 }
 
-function coverageRecordsToSummary(records: SectionSummary[]): CoverageSummary {
+function coverageRecordsToSummary(records: SectionSummary[]): libCoverage.CoverageSummary {
   const flavors = ['branches', 'functions', 'lines'] as const;
-  const data: CoverageSummaryData = {
+  const data: libCoverage.CoverageSummaryData = {
     lines: { total: 0, covered: 0, skipped: 0, pct: 0 },
     statements: { total: 0, covered: 0, skipped: 0, pct: NaN },
     branches: { total: 0, covered: 0, skipped: 0, pct: NaN },
@@ -54,16 +49,16 @@ function coverageRecordsToSummary(records: SectionSummary[]): CoverageSummary {
     data[flavor].pct =
       data[flavor].total === 0 ? 100 : (data[flavor].covered / data[flavor].total) * 100;
   });
-  return createCoverageSummary(data);
+  return libCoverage.createCoverageSummary(data);
 }
 
-async function loadLCOV(file: string): Promise<CoverageSummary> {
+async function loadLCOV(file: string): Promise<libCoverage.CoverageSummary> {
   return coverageRecordsToSummary(
     await lcovParser({ from: await fs.readFile(file, { encoding: 'utf-8' }) })
   );
 }
 
-export async function loadCobertura(file: string): Promise<CoverageSummary> {
+export async function loadCobertura(file: string): Promise<libCoverage.CoverageSummary> {
   const parser = new XMLParser({
     ignoreAttributes: false,
     ignoreDeclaration: true,
@@ -72,7 +67,7 @@ export async function loadCobertura(file: string): Promise<CoverageSummary> {
     stopNodes: ['sources', 'packages']
   });
   const report = parser.parse(await fs.readFile(file, { encoding: 'utf-8' }));
-  const data: CoverageSummaryData = {
+  const data: libCoverage.CoverageSummaryData = {
     lines: {
       total: Number(report.coverage['@_lines-valid']),
       covered: Number(report.coverage['@_lines-covered']),
@@ -88,20 +83,20 @@ export async function loadCobertura(file: string): Promise<CoverageSummary> {
     },
     functions: { total: 0, covered: 0, skipped: 0, pct: NaN }
   };
-  return createCoverageSummary(data);
+  return libCoverage.createCoverageSummary(data);
 }
 
-async function loadSummary(file: string): Promise<CoverageSummary> {
+async function loadSummary(file: string): Promise<libCoverage.CoverageSummary> {
   const data = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
   assert(data.total, `Coverage file '${file}' is not a coverage summary file`);
-  const summary = createCoverageSummary();
+  const summary = libCoverage.createCoverageSummary();
   summary.merge(data.total);
   return summary;
 }
 
 export async function run(opts: Opts) {
   const file = opts.coverage;
-  let summary: CoverageSummary;
+  let summary: libCoverage.CoverageSummary;
   if (opts.coverageFormat === 'summary') {
     assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
     summary = await loadSummary(file);
@@ -119,7 +114,10 @@ export async function run(opts: Opts) {
   await publishCoverage({ ...opts, project: opts.project }, summary);
 }
 
-async function publishCoverage(opts: Omit<Opts, 'coverage'>, coverage: CoverageSummary) {
+async function publishCoverage(
+  opts: Omit<Opts, 'coverage'>,
+  coverage: libCoverage.CoverageSummary
+) {
   for (const flavor of ['branches', 'statements', 'functions', 'lines'] as const) {
     const pct = coverage[flavor].pct;
     const coveredItems = coverage[flavor].covered;
