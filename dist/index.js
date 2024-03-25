@@ -56673,6 +56673,13 @@ function coverageRecordsToSummary(records) {
 async function loadLCOV(file) {
     return coverageRecordsToSummary(await (0, lcov_parser_1.default)({ from: await fs.readFile(file, { encoding: 'utf-8' }) }));
 }
+function assertIsCoberturaReport(data) {
+    if (typeof data !== 'object' ||
+        data === null ||
+        typeof data.coverage !== 'object') {
+        throw new Error('Invalid cobertura report');
+    }
+}
 async function loadCobertura(file) {
     const parser = new fast_xml_parser_1.XMLParser({
         ignoreAttributes: false,
@@ -56682,6 +56689,7 @@ async function loadCobertura(file) {
         stopNodes: ['sources', 'packages']
     });
     const report = parser.parse(await fs.readFile(file, { encoding: 'utf-8' }));
+    assertIsCoberturaReport(report);
     const data = {
         lines: {
             total: Number(report.coverage['@_lines-valid']),
@@ -56705,6 +56713,7 @@ async function loadSummary(file) {
     const data = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
     (0, node_assert_1.default)(data.total, `Coverage file '${file}' is not a coverage summary file`);
     const summary = istanbul_lib_coverage_1.default.createCoverageSummary();
+    // @ts-expect-error data is not a CoverageSummary, but CoverageSummaryData
     summary.merge(data.total);
     return summary;
 }
@@ -56726,6 +56735,7 @@ async function run(opts) {
         summary = await loadCobertura(file);
     }
     else {
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         throw new Error(`Unknown coverage format '${opts.coverageFormat}'`);
     }
     await publishCoverage(Object.assign(Object.assign({}, opts), { project: opts.project }), summary);

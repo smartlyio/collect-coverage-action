@@ -1,10 +1,11 @@
-const eslint = require('@eslint/js');
-const tseslint = require('typescript-eslint');
+import eslintConfigPrettier from 'eslint-config-prettier';
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
 
-module.exports = tseslint.config(
+export default tseslint.config(
   // Global ignores
   {
-    ignores: ["dist/*", 'eslint.config.js', 'jest.config.mjs', 'coverage/*'],
+    ignores: ['dist/*', 'eslint.config.js', 'coverage/*']
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -12,19 +13,18 @@ module.exports = tseslint.config(
     languageOptions: {
       parserOptions: {
         project: true,
-        tsconfigRootDir: __dirname,
-      },
-    },
+        tsconfigRootDir: import.meta.dirname
+      }
+    }
   },
   {
-    files: [
-      'src/**/*.{ts,tsx,cts,mts}',
-    ],
+    files: ['src/**/*.spec.{ts,tsx,cts,mts}'],
     rules: {
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/restrict-template-expressions': 'off',
+      '@typescript-eslint/restrict-template-expressions': 'off'
     }
   },
+  eslintConfigPrettier
 );

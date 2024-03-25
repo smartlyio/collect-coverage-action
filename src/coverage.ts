@@ -17,7 +17,9 @@ type Opts = {
 async function generateSummary(file: string): Promise<libCoverage.CoverageSummary> {
   const map = libCoverage.createCoverageMap({});
   const summary = libCoverage.createCoverageSummary();
-  map.merge(JSON.parse(await fs.readFile(file, { encoding: 'utf-8' })));
+  map.merge(
+    JSON.parse(await fs.readFile(file, { encoding: 'utf-8' })) as libCoverage.CoverageMapData
+  );
   map.files().forEach(file => {
     const fileCoverage = map.fileCoverageFor(file);
     const fileSummary = fileCoverage.toSummary();
@@ -58,6 +60,25 @@ async function loadLCOV(file: string): Promise<libCoverage.CoverageSummary> {
   );
 }
 
+function assertIsCoberturaReport(data: unknown): asserts data is {
+  coverage: {
+    '@_lines-valid': string;
+    '@_lines-covered': string;
+    '@_branches-covered': string;
+    '@_branches-valid': string;
+    '@_line-rate': string;
+    '@_branch-rate': string;
+  };
+} {
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    typeof (data as { coverage: unknown }).coverage !== 'object'
+  ) {
+    throw new Error('Invalid cobertura report');
+  }
+}
+
 export async function loadCobertura(file: string): Promise<libCoverage.CoverageSummary> {
   const parser = new XMLParser({
     ignoreAttributes: false,
@@ -66,7 +87,8 @@ export async function loadCobertura(file: string): Promise<libCoverage.CoverageS
     processEntities: false,
     stopNodes: ['sources', 'packages']
   });
-  const report = parser.parse(await fs.readFile(file, { encoding: 'utf-8' }));
+  const report = parser.parse(await fs.readFile(file, { encoding: 'utf-8' })) as unknown;
+  assertIsCoberturaReport(report);
   const data: libCoverage.CoverageSummaryData = {
     lines: {
       total: Number(report.coverage['@_lines-valid']),
@@ -87,9 +109,12 @@ export async function loadCobertura(file: string): Promise<libCoverage.CoverageS
 }
 
 async function loadSummary(file: string): Promise<libCoverage.CoverageSummary> {
-  const data = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' }));
+  const data = JSON.parse(await fs.readFile(file, { encoding: 'utf-8' })) as {
+    total: libCoverage.CoverageSummaryData;
+  };
   assert(data.total, `Coverage file '${file}' is not a coverage summary file`);
   const summary = libCoverage.createCoverageSummary();
+  // @ts-expect-error data is not a CoverageSummary, but CoverageSummaryData
   summary.merge(data.total);
   return summary;
 }
@@ -108,6 +133,7 @@ export async function run(opts: Opts) {
   } else if (opts.coverageFormat === 'cobertura') {
     summary = await loadCobertura(file);
   } else {
+    // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
     throw new Error(`Unknown coverage format '${opts.coverageFormat}'`);
   }
 
