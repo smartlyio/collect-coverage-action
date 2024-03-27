@@ -5,7 +5,6 @@ describe('coverage', () => {
   let mockClient: MockPool;
   let mockAgent: MockAgent;
   beforeEach(() => {
-    // @ts-expect-error mock fetch with undici
     global.fetch = fetch;
     mockAgent = new MockAgent();
     mockClient = mockAgent.get('https://example.com'); //new MockClient('https://example.com', { agent: mockAgent });
