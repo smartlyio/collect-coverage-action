@@ -58718,11 +58718,11 @@ async function run(opts) {
     const file = opts.coverage;
     let summary;
     if (opts.coverageFormat === 'summary') {
-        external_node_assert_default()(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+        external_node_assert_default()(file.endsWith('.json'), `Coverage file '${file}' should be (jest) json formatted`);
         summary = await loadSummary(file);
     }
     else if (opts.coverageFormat === 'istanbul') {
-        external_node_assert_default()(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+        external_node_assert_default()(file.endsWith('.json'), `Coverage file '${file}' should be (jest) json formatted`);
         summary = await generateSummary(file);
     }
     else if (opts.coverageFormat === 'lcov') {

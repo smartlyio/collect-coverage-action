@@ -6,8 +6,8 @@
   "license": "MIT",
   "scripts": {
     "lint": "eslint -c eslint.config.js .",
-    "format": "prettier --write src",
-    "format:check": "prettier --check src",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "clean": "rm -rf dist",
     "prebundle": "npm run clean",
     "bundle": "ncc build src/index.ts --source-map --license licenses.txt",

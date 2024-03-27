@@ -26,8 +26,8 @@ or with `coverage-format: summary` option:
 ```
 coverageReporters: ['json-summary]
 ```
-If you can produce a similar file without Jest that is fine also.
 
+If you can produce a similar file without Jest that is fine also.
 
 This results in a request like this being made:
 
