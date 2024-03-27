@@ -1,6 +1,6 @@
 {
   "name": "collect-coverage-action",
-  "version": "3.4.1",
+  "version": "3.4.2",
   "main": "dist/index.js",
   "type": "module",
   "license": "MIT",
