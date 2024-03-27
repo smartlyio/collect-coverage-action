@@ -40,8 +40,11 @@ function coverageRecordsToSummary(records: SectionSummary[]): libCoverage.Covera
 
   for (const file of records) {
     flavors.forEach(flavor => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (file[flavor]) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         data[flavor].total += file[flavor].instrumented ?? 0;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         data[flavor].covered += file[flavor].hit ?? 0;
       }
     });
@@ -130,7 +133,8 @@ export async function run(opts: Opts) {
     summary = await generateSummary(file);
   } else if (opts.coverageFormat === 'lcov') {
     summary = await loadLCOV(file);
-  } else if (opts.coverageFormat === 'cobertura') {
+  } // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  else if (opts.coverageFormat === 'cobertura') {
     summary = await loadCobertura(file);
   } else {
     // eslint-disable-next-line @typescript-eslint/restrict-template-expressions

@@ -58656,8 +58656,11 @@ function coverageRecordsToSummary(records) {
     };
     for (const file of records) {
         flavors.forEach(flavor => {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
             if (file[flavor]) {
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                 data[flavor].total += file[flavor].instrumented ?? 0;
+                // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                 data[flavor].covered += file[flavor].hit ?? 0;
             }
         });
@@ -58727,7 +58730,7 @@ async function run(opts) {
     }
     else if (opts.coverageFormat === 'lcov') {
         summary = await loadLCOV(file);
-    }
+    } // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     else if (opts.coverageFormat === 'cobertura') {
         summary = await loadCobertura(file);
     }
@@ -58786,7 +58789,7 @@ async function src_run() {
         tag: pr != null ? `pr-${pr}` : 'main',
         project: github.context.repo.repo,
         url: core.getInput(urlArgument),
-        coverageFormat: (core.getInput('coverage-format') ?? 'istanbul'),
+        coverageFormat: (core.getInput('coverage-format') || 'istanbul'),
         dryRun: core.getInput('dry-run') === 'true'
     });
 }
