@@ -4,7 +4,7 @@ import { default as libCoverage } from 'istanbul-lib-coverage';
 import lcovParser, { SectionSummary } from '@friedemannsommer/lcov-parser';
 import { XMLParser } from 'fast-xml-parser';
 
-type Opts = {
+interface Opts {
   coverage: string;
   token: string;
   project: string;
@@ -12,7 +12,7 @@ type Opts = {
   url: string;
   dryRun?: boolean;
   coverageFormat: 'summary' | 'istanbul' | 'lcov' | 'cobertura';
-};
+}
 
 async function generateSummary(file: string): Promise<libCoverage.CoverageSummary> {
   const map = libCoverage.createCoverageMap({});
@@ -123,10 +123,10 @@ export async function run(opts: Opts) {
   const file = opts.coverage;
   let summary: libCoverage.CoverageSummary;
   if (opts.coverageFormat === 'summary') {
-    assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+    assert(file.endsWith('.json'), `Coverage file '${file}' should be (jest) json formatted`);
     summary = await loadSummary(file);
   } else if (opts.coverageFormat === 'istanbul') {
-    assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+    assert(file.endsWith('.json'), `Coverage file '${file}' should be (jest) json formatted`);
     summary = await generateSummary(file);
   } else if (opts.coverageFormat === 'lcov') {
     summary = await loadLCOV(file);

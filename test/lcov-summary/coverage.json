@@ -1,5 +1,5 @@
 {
-  "total":{
+  "total": {
     "lines": {
       "total": 19133,
       "covered": 18080,
@@ -7,10 +7,10 @@
       "pct": 94.49641979825432
     },
     "branches": {
-      "total":3913,
-      "covered":3086,
-      "skipped":827,
-      "pct":78.86532072578584
+      "total": 3913,
+      "covered": 3086,
+      "skipped": 827,
+      "pct": 78.86532072578584
     }
   }
 }
