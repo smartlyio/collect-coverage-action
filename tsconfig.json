@@ -2,18 +2,14 @@
   "compilerOptions": {
     "strict": true,
     "declaration": false,
-    "target": "es2017",
-    "lib": ["es6", "es2017", "dom", "esnext.asynciterable"],
-    "module": "commonjs",
-    "moduleResolution": "node",
     "sourceMap": true,
-    "removeComments": false,
+    "module": "ESNext",
+    "lib": ["es2023"],
+    "target": "es2022",
+    "moduleResolution": "Bundler",
     "esModuleInterop": true,
-    "alwaysStrict": true,
-    "typeRoots": ["./src/types", "./node_modules/@types"],
-    "baseUrl": "src",
+    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist"
-  },
-  "exclude": ["packages"]
+  }
 }

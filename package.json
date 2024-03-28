@@ -6,11 +6,11 @@
   "license": "MIT",
   "scripts": {
     "lint": "eslint -c eslint.config.js .",
-    "format": "prettier --write src",
-    "format:check": "prettier --check src",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "clean": "rm -rf dist",
     "prebundle": "npm run clean",
-    "bundle": "ncc build src/index.ts --source-map --license licenses.txt --target es2022",
+    "bundle": "ncc build src/index.ts --source-map --license licenses.txt",
     "test": "NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest",
     "typecheck": "tsc --noEmit",
     "version": "npm run bundle && git add -f -- dist/index.js"

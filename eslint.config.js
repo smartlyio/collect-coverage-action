@@ -1,14 +1,17 @@
-import eslintConfigPrettier from 'eslint-config-prettier';
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   // Global ignores
   {
-    ignores: ['dist/*', 'eslint.config.js', 'coverage/*']
+    ignores: ['dist/*', 'coverage/*']
   },
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  ...tseslint.configs.stylisticTypeChecked,
+  ...tseslint.configs.strictTypeChecked,
   {
     languageOptions: {
       parserOptions: {
@@ -26,5 +29,6 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': 'off'
     }
   },
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   eslintConfigPrettier
 );

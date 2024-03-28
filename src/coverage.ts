@@ -4,7 +4,7 @@ import { default as libCoverage } from 'istanbul-lib-coverage';
 import lcovParser, { SectionSummary } from '@friedemannsommer/lcov-parser';
 import { XMLParser } from 'fast-xml-parser';
 
-type Opts = {
+interface Opts {
   coverage: string;
   token: string;
   project: string;
@@ -12,7 +12,7 @@ type Opts = {
   url: string;
   dryRun?: boolean;
   coverageFormat: 'summary' | 'istanbul' | 'lcov' | 'cobertura';
-};
+}
 
 async function generateSummary(file: string): Promise<libCoverage.CoverageSummary> {
   const map = libCoverage.createCoverageMap({});
@@ -40,8 +40,11 @@ function coverageRecordsToSummary(records: SectionSummary[]): libCoverage.Covera
 
   for (const file of records) {
     flavors.forEach(flavor => {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (file[flavor]) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         data[flavor].total += file[flavor].instrumented ?? 0;
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         data[flavor].covered += file[flavor].hit ?? 0;
       }
     });
@@ -123,14 +126,15 @@ export async function run(opts: Opts) {
   const file = opts.coverage;
   let summary: libCoverage.CoverageSummary;
   if (opts.coverageFormat === 'summary') {
-    assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+    assert(file.endsWith('.json'), `Coverage file '${file}' should be (jest) json formatted`);
     summary = await loadSummary(file);
   } else if (opts.coverageFormat === 'istanbul') {
-    assert(/\.json$/.test(file), `Coverage file '${file}' should be (jest) json formatted`);
+    assert(file.endsWith('.json'), `Coverage file '${file}' should be (jest) json formatted`);
     summary = await generateSummary(file);
   } else if (opts.coverageFormat === 'lcov') {
     summary = await loadLCOV(file);
-  } else if (opts.coverageFormat === 'cobertura') {
+  } // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  else if (opts.coverageFormat === 'cobertura') {
     summary = await loadCobertura(file);
   } else {
     // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
