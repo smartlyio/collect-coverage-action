@@ -31131,6 +31131,10 @@ module.exports.RetryHandler = RetryHandler
 module.exports.DecoratorHandler = DecoratorHandler
 module.exports.RedirectHandler = RedirectHandler
 module.exports.createRedirectInterceptor = createRedirectInterceptor
+module.exports.interceptors = {
+  redirect: __nccwpck_require__(7773),
+  retry: __nccwpck_require__(5558)
+}
 
 module.exports.buildConnector = buildConnector
 module.exports.errors = errors
@@ -31782,7 +31786,8 @@ class RequestHandler extends AsyncResource {
 
     const parsedHeaders = responseHeaders === 'raw' ? util.parseHeaders(rawHeaders) : headers
     const contentType = parsedHeaders['content-type']
-    const body = new Readable({ resume, abort, contentType, highWaterMark })
+    const contentLength = parsedHeaders['content-length']
+    const body = new Readable({ resume, abort, contentType, contentLength, highWaterMark })
 
     this.callback = null
     this.res = body
@@ -32242,8 +32247,9 @@ const { ReadableStreamFrom } = __nccwpck_require__(3983)
 const kConsume = Symbol('kConsume')
 const kReading = Symbol('kReading')
 const kBody = Symbol('kBody')
-const kAbort = Symbol('abort')
+const kAbort = Symbol('kAbort')
 const kContentType = Symbol('kContentType')
+const kContentLength = Symbol('kContentLength')
 
 const noop = () => {}
 
@@ -32252,6 +32258,7 @@ class BodyReadable extends Readable {
     resume,
     abort,
     contentType = '',
+    contentLength,
     highWaterMark = 64 * 1024 // Same as nodejs fs streams.
   }) {
     super({
@@ -32266,6 +32273,7 @@ class BodyReadable extends Readable {
     this[kConsume] = null
     this[kBody] = null
     this[kContentType] = contentType
+    this[kContentLength] = contentLength
 
     // Is stream being consumed through Readable API?
     // This is an optimization so that we avoid checking
@@ -32377,7 +32385,7 @@ class BodyReadable extends Readable {
   }
 
   async dump (opts) {
-    let limit = Number.isFinite(opts?.limit) ? opts.limit : 262144
+    let limit = Number.isFinite(opts?.limit) ? opts.limit : 128 * 1024
     const signal = opts?.signal
 
     if (signal != null && (typeof signal !== 'object' || !('aborted' in signal))) {
@@ -32391,6 +32399,10 @@ class BodyReadable extends Readable {
     }
 
     return await new Promise((resolve, reject) => {
+      if (this[kContentLength] > limit) {
+        this.destroy(new AbortError())
+      }
+
       const onAbort = () => {
         this.destroy(signal.reason ?? new AbortError())
       }
@@ -32611,31 +32623,69 @@ async function getResolveErrorBodyCallback ({ callback, body, contentType, statu
     }
   }
 
+  const message = `Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ''}`
+
   if (statusCode === 204 || !contentType || !chunks) {
-    process.nextTick(callback, new ResponseStatusCodeError(`Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ''}`, statusCode, headers))
+    queueMicrotask(() => callback(new ResponseStatusCodeError(message, statusCode, headers)))
     return
   }
 
+  const stackTraceLimit = Error.stackTraceLimit
+  Error.stackTraceLimit = 0
+  let payload
+
   try {
-    if (contentType.startsWith('application/json')) {
-      const payload = JSON.parse(chunksDecode(chunks, length))
-      process.nextTick(callback, new ResponseStatusCodeError(`Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ''}`, statusCode, headers, payload))
-      return
+    if (isContentTypeApplicationJson(contentType)) {
+      payload = JSON.parse(chunksDecode(chunks, length))
+    } else if (isContentTypeText(contentType)) {
+      payload = chunksDecode(chunks, length)
     }
-
-    if (contentType.startsWith('text/')) {
-      const payload = chunksDecode(chunks, length)
-      process.nextTick(callback, new ResponseStatusCodeError(`Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ''}`, statusCode, headers, payload))
-      return
-    }
-  } catch (err) {
-    // Process in a fallback if error
+  } catch {
+    // process in a callback to avoid throwing in the microtask queue
+  } finally {
+    Error.stackTraceLimit = stackTraceLimit
   }
-
-  process.nextTick(callback, new ResponseStatusCodeError(`Response status code ${statusCode}${statusMessage ? `: ${statusMessage}` : ''}`, statusCode, headers))
+  queueMicrotask(() => callback(new ResponseStatusCodeError(message, statusCode, headers, payload)))
 }
 
-module.exports = { getResolveErrorBodyCallback }
+const isContentTypeApplicationJson = (contentType) => {
+  return (
+    contentType.length > 15 &&
+    contentType[11] === '/' &&
+    contentType[0] === 'a' &&
+    contentType[1] === 'p' &&
+    contentType[2] === 'p' &&
+    contentType[3] === 'l' &&
+    contentType[4] === 'i' &&
+    contentType[5] === 'c' &&
+    contentType[6] === 'a' &&
+    contentType[7] === 't' &&
+    contentType[8] === 'i' &&
+    contentType[9] === 'o' &&
+    contentType[10] === 'n' &&
+    contentType[12] === 'j' &&
+    contentType[13] === 's' &&
+    contentType[14] === 'o' &&
+    contentType[15] === 'n'
+  )
+}
+
+const isContentTypeText = (contentType) => {
+  return (
+    contentType.length > 4 &&
+    contentType[4] === '/' &&
+    contentType[0] === 't' &&
+    contentType[1] === 'e' &&
+    contentType[2] === 'x' &&
+    contentType[3] === 't'
+  )
+}
+
+module.exports = {
+  getResolveErrorBodyCallback,
+  isContentTypeApplicationJson,
+  isContentTypeText
+}
 
 
 /***/ }),
@@ -32830,7 +32880,7 @@ function setupTimeout (onConnectTimeout, timeout) {
 function onConnectTimeout (socket) {
   let message = 'Connect Timeout Error'
   if (Array.isArray(socket.autoSelectFamilyAttemptedAddresses)) {
-    message = +` (attempted addresses: ${socket.autoSelectFamilyAttemptedAddresses.join(', ')})`
+    message += ` (attempted addresses: ${socket.autoSelectFamilyAttemptedAddresses.join(', ')})`
   }
   util.destroy(socket, new ConnectTimeoutError(message))
 }
@@ -33374,6 +33424,16 @@ class RequestRetryError extends UndiciError {
   }
 }
 
+class SecureProxyConnectionError extends UndiciError {
+  constructor (cause, message, options) {
+    super(message, { cause, ...(options ?? {}) })
+    this.name = 'SecureProxyConnectionError'
+    this.message = message || 'Secure Proxy Connection failed'
+    this.code = 'UND_ERR_PRX_TLS'
+    this.cause = cause
+  }
+}
+
 module.exports = {
   AbortError,
   HTTPParserError,
@@ -33395,7 +33455,8 @@ module.exports = {
   ResponseContentLengthMismatchError,
   BalancedPoolMissingUpstreamError,
   ResponseExceededMaxSizeError,
-  RequestRetryError
+  RequestRetryError,
+  SecureProxyConnectionError
 }
 
 
@@ -33446,7 +33507,8 @@ class Request {
     bodyTimeout,
     reset,
     throwOnError,
-    expectContinue
+    expectContinue,
+    servername
   }, handler) {
     if (typeof path !== 'string') {
       throw new InvalidArgumentError('path must be a string')
@@ -33587,7 +33649,7 @@ class Request {
 
     validateHandler(handler, method, upgrade)
 
-    this.servername = getServerName(this.host)
+    this.servername = servername || getServerName(this.host)
 
     this[kHandler] = handler
 
@@ -34284,9 +34346,6 @@ function bufferToLowerCasedHeaderName (value) {
  * @returns {Record<string, string | string[]>}
  */
 function parseHeaders (headers, obj) {
-  // For H2 support
-  if (!Array.isArray(headers)) return headers
-
   if (obj === undefined) obj = {}
   for (let i = 0; i < headers.length; i += 2) {
     const key = headerNameToString(headers[i])
@@ -34478,13 +34537,22 @@ function addAbortListener (signal, listener) {
   return () => signal.removeListener('abort', listener)
 }
 
-const hasToWellFormed = !!String.prototype.toWellFormed
+const hasToWellFormed = typeof String.prototype.toWellFormed === 'function'
+const hasIsWellFormed = typeof String.prototype.isWellFormed === 'function'
 
 /**
  * @param {string} val
  */
 function toUSVString (val) {
   return hasToWellFormed ? `${val}`.toWellFormed() : nodeUtil.toUSVString(val)
+}
+
+/**
+ * @param {string} val
+ */
+// TODO: move this to webidl
+function isUSVString (val) {
+  return hasIsWellFormed ? `${val}`.isWellFormed() : toUSVString(val) === `${val}`
 }
 
 /**
@@ -34576,6 +34644,7 @@ module.exports = {
   isErrored,
   isReadable,
   toUSVString,
+  isUSVString,
   isReadableAborted,
   isBlobLike,
   parseOrigin,
@@ -36364,6 +36433,20 @@ const {
   }
 } = http2
 
+function parseH2Headers (headers) {
+  // set-cookie is always an array. Duplicates are added to the array.
+  // For duplicate cookie headers, the values are joined together with '; '.
+  headers = Object.entries(headers).flat(2)
+
+  const result = []
+
+  for (const header of headers) {
+    result.push(Buffer.from(header))
+  }
+
+  return result
+}
+
 async function connectH2 (client, socket) {
   client[kSocket] = socket
 
@@ -36701,9 +36784,27 @@ function writeH2 (client, request) {
     const { [HTTP2_HEADER_STATUS]: statusCode, ...realHeaders } = headers
     request.onResponseStarted()
 
-    if (request.onHeaders(Number(statusCode), realHeaders, stream.resume.bind(stream), '') === false) {
+    // Due to the stream nature, it is possible we face a race condition
+    // where the stream has been assigned, but the request has been aborted
+    // the request remains in-flight and headers hasn't been received yet
+    // for those scenarios, best effort is to destroy the stream immediately
+    // as there's no value to keep it open.
+    if (request.aborted || request.completed) {
+      const err = new RequestAbortedError()
+      errorRequest(client, request, err)
+      util.destroy(stream, err)
+      return
+    }
+
+    if (request.onHeaders(Number(statusCode), parseH2Headers(realHeaders), stream.resume.bind(stream), '') === false) {
       stream.pause()
     }
+
+    stream.on('data', (chunk) => {
+      if (request.onData(chunk) === false) {
+        stream.pause()
+      }
+    })
   })
 
   stream.once('end', () => {
@@ -36726,12 +36827,6 @@ function writeH2 (client, request) {
     const err = new InformationalError('HTTP/2: stream half-closed (remote)')
     errorRequest(client, request, err)
     util.destroy(stream, err)
-  })
-
-  stream.on('data', (chunk) => {
-    if (request.onData(chunk) === false) {
-      stream.pause()
-    }
   })
 
   stream.once('close', () => {
@@ -37015,6 +37110,7 @@ const {
 } = __nccwpck_require__(2785)
 const connectH1 = __nccwpck_require__(3264)
 const connectH2 = __nccwpck_require__(296)
+let deprecatedInterceptorWarned = false
 
 const kClosedResolve = Symbol('kClosedResolve')
 
@@ -37163,9 +37259,18 @@ class Client extends DispatcherBase {
       })
     }
 
-    this[kInterceptors] = interceptors?.Client && Array.isArray(interceptors.Client)
-      ? interceptors.Client
-      : [createRedirectInterceptor({ maxRedirections })]
+    if (interceptors?.Client && Array.isArray(interceptors.Client)) {
+      this[kInterceptors] = interceptors.Client
+      if (!deprecatedInterceptorWarned) {
+        deprecatedInterceptorWarned = true
+        process.emitWarning('Client.Options#interceptor is deprecated. Use Dispatcher#compose instead.', {
+          code: 'UNDICI-CLIENT-INTERCEPTOR-DEPRECATED'
+        })
+      }
+    } else {
+      this[kInterceptors] = [createRedirectInterceptor({ maxRedirections })]
+    }
+
     this[kUrl] = util.parseOrigin(url)
     this[kConnector] = connect
     this[kPipelining] = pipelining != null ? pipelining : 1
@@ -37772,7 +37877,6 @@ module.exports = DispatcherBase
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
-
 const EventEmitter = __nccwpck_require__(5673)
 
 class Dispatcher extends EventEmitter {
@@ -37786,6 +37890,53 @@ class Dispatcher extends EventEmitter {
 
   destroy () {
     throw new Error('not implemented')
+  }
+
+  compose (...args) {
+    // So we handle [interceptor1, interceptor2] or interceptor1, interceptor2, ...
+    const interceptors = Array.isArray(args[0]) ? args[0] : args
+    let dispatch = this.dispatch.bind(this)
+
+    for (const interceptor of interceptors) {
+      if (interceptor == null) {
+        continue
+      }
+
+      if (typeof interceptor !== 'function') {
+        throw new TypeError(`invalid interceptor, expected function received ${typeof interceptor}`)
+      }
+
+      dispatch = interceptor(dispatch)
+
+      if (dispatch == null || typeof dispatch !== 'function' || dispatch.length !== 2) {
+        throw new TypeError('invalid interceptor')
+      }
+    }
+
+    return new ComposedDispatcher(this, dispatch)
+  }
+}
+
+class ComposedDispatcher extends Dispatcher {
+  #dispatcher = null
+  #dispatch = null
+
+  constructor (dispatcher, dispatch) {
+    super()
+    this.#dispatcher = dispatcher
+    this.#dispatch = dispatch
+  }
+
+  dispatch (...args) {
+    this.#dispatch(...args)
+  }
+
+  close (...args) {
+    return this.#dispatcher.close(...args)
+  }
+
+  destroy (...args) {
+    return this.#dispatcher.destroy(...args)
   }
 }
 
@@ -38270,7 +38421,7 @@ const { URL } = __nccwpck_require__(1041)
 const Agent = __nccwpck_require__(1208)
 const Pool = __nccwpck_require__(177)
 const DispatcherBase = __nccwpck_require__(1544)
-const { InvalidArgumentError, RequestAbortedError } = __nccwpck_require__(8045)
+const { InvalidArgumentError, RequestAbortedError, SecureProxyConnectionError } = __nccwpck_require__(8045)
 const buildConnector = __nccwpck_require__(2067)
 
 const kAgent = Symbol('proxy agent')
@@ -38302,10 +38453,9 @@ class ProxyAgent extends DispatcherBase {
     }
 
     const url = this.#getUrl(opts)
-    const { href, origin, port, protocol, username, password } = url
+    const { href, origin, port, protocol, username, password, hostname: proxyHostname } = url
 
     this[kProxy] = { uri: href, protocol }
-    this[kAgent] = new Agent(opts)
     this[kInterceptors] = opts.interceptors?.ProxyAgent && Array.isArray(opts.interceptors.ProxyAgent)
       ? opts.interceptors.ProxyAgent
       : []
@@ -38343,7 +38493,8 @@ class ProxyAgent extends DispatcherBase {
             headers: {
               ...this[kProxyHeaders],
               host: requestedHost
-            }
+            },
+            servername: this[kProxyTls]?.servername || proxyHostname
           })
           if (statusCode !== 200) {
             socket.on('error', () => {}).destroy()
@@ -38361,7 +38512,12 @@ class ProxyAgent extends DispatcherBase {
           }
           this[kConnectEndpoint]({ ...opts, servername, httpSocket: socket }, callback)
         } catch (err) {
-          callback(err)
+          if (err.code === 'ERR_TLS_CERT_ALTNAME_INVALID') {
+            // Throw a custom error to avoid loop in client.js#connect
+            callback(new SecureProxyConnectionError(err))
+          } else {
+            callback(err)
+          }
         }
       }
     })
@@ -38779,9 +38935,9 @@ function shouldRemoveHeader (header, removeContent, unknownOrigin) {
   if (removeContent && util.headerNameToString(header).startsWith('content-')) {
     return true
   }
-  if (unknownOrigin && (header.length === 13 || header.length === 6)) {
+  if (unknownOrigin && (header.length === 13 || header.length === 6 || header.length === 19)) {
     const name = util.headerNameToString(header)
-    return name === 'authorization' || name === 'cookie'
+    return name === 'authorization' || name === 'cookie' || name === 'proxy-authorization'
   }
   return false
 }
@@ -38814,6 +38970,7 @@ module.exports = RedirectHandler
 
 /***/ 6242:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
 
 const assert = __nccwpck_require__(8061)
 
@@ -38854,7 +39011,7 @@ class RetryHandler {
       retry: retryFn ?? RetryHandler[kRetryHandlerDefaultRetry],
       retryAfter: retryAfter ?? true,
       maxTimeout: maxTimeout ?? 30 * 1000, // 30s,
-      timeout: minTimeout ?? 500, // .5s
+      minTimeout: minTimeout ?? 500, // .5s
       timeoutFactor: timeoutFactor ?? 2,
       maxRetries: maxRetries ?? 5,
       // What errors we should retry
@@ -38876,6 +39033,7 @@ class RetryHandler {
     }
 
     this.retryCount = 0
+    this.retryCountCheckpoint = 0
     this.start = 0
     this.end = null
     this.etag = null
@@ -38921,17 +39079,14 @@ class RetryHandler {
     const { method, retryOptions } = opts
     const {
       maxRetries,
-      timeout,
+      minTimeout,
       maxTimeout,
       timeoutFactor,
       statusCodes,
       errorCodes,
       methods
     } = retryOptions
-    let { counter, currentTimeout } = state
-
-    currentTimeout =
-      currentTimeout != null && currentTimeout > 0 ? currentTimeout : timeout
+    const { counter } = state
 
     // Any code that is not a Undici's originated and allowed to retry
     if (
@@ -38976,9 +39131,7 @@ class RetryHandler {
     const retryTimeout =
       retryAfterHeader > 0
         ? Math.min(retryAfterHeader, maxTimeout)
-        : Math.min(currentTimeout * timeoutFactor ** counter, maxTimeout)
-
-    state.currentTimeout = retryTimeout
+        : Math.min(minTimeout * timeoutFactor ** (counter - 1), maxTimeout)
 
     setTimeout(() => cb(null), retryTimeout)
   }
@@ -39062,14 +39215,12 @@ class RetryHandler {
         }
 
         const { start, size, end = size } = range
-
         assert(
-          start != null && Number.isFinite(start) && this.start !== start,
+          start != null && Number.isFinite(start),
           'content-range mismatch'
         )
-        assert(Number.isFinite(start))
         assert(
-          end != null && Number.isFinite(end) && this.end !== end,
+          end != null && Number.isFinite(end),
           'invalid content-length'
         )
 
@@ -39126,10 +39277,19 @@ class RetryHandler {
       return this.handler.onError(err)
     }
 
+    // We reconcile in case of a mix between network errors
+    // and server error response
+    if (this.retryCount - this.retryCountCheckpoint > 0) {
+      // We count the difference between the last checkpoint and the current retry count
+      this.retryCount = this.retryCountCheckpoint + (this.retryCount - this.retryCountCheckpoint)
+    } else {
+      this.retryCount += 1
+    }
+
     this.retryOpts.retry(
       err,
       {
-        state: { counter: this.retryCount++, currentTimeout: this.retryAfter },
+        state: { counter: this.retryCount },
         opts: { retryOptions: this.retryOpts, ...this.opts }
       },
       onRetry.bind(this)
@@ -39151,6 +39311,7 @@ class RetryHandler {
       }
 
       try {
+        this.retryCountCheckpoint = this.retryCount
         this.dispatch(this.opts, this)
       } catch (err) {
         this.handler.onError(err)
@@ -39188,6 +39349,63 @@ function createRedirectInterceptor ({ maxRedirections: defaultMaxRedirections })
 }
 
 module.exports = createRedirectInterceptor
+
+
+/***/ }),
+
+/***/ 7773:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+
+const RedirectHandler = __nccwpck_require__(649)
+
+module.exports = opts => {
+  const globalMaxRedirections = opts?.maxRedirections
+  return dispatch => {
+    return function redirectInterceptor (opts, handler) {
+      const { maxRedirections = globalMaxRedirections, ...baseOpts } = opts
+
+      if (!maxRedirections) {
+        return dispatch(opts, handler)
+      }
+
+      const redirectHandler = new RedirectHandler(
+        dispatch,
+        maxRedirections,
+        opts,
+        handler
+      )
+
+      return dispatch(baseOpts, redirectHandler)
+    }
+  }
+}
+
+
+/***/ }),
+
+/***/ 5558:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+
+const RetryHandler = __nccwpck_require__(6242)
+
+module.exports = globalOpts => {
+  return dispatch => {
+    return function retryInterceptor (opts, handler) {
+      return dispatch(
+        opts,
+        new RetryHandler(
+          { ...opts, retryOptions: { ...globalOpts, ...opts.retryOptions } },
+          {
+            handler,
+            dispatch
+          }
+        )
+      )
+    }
+  }
+}
 
 
 /***/ }),
@@ -40461,6 +40679,9 @@ module.exports = {
 const { Transform } = __nccwpck_require__(4492)
 const { Console } = __nccwpck_require__(27)
 
+const PERSISTENT = process.versions.icu ? '✅' : 'Y '
+const NOT_PERSISTENT = process.versions.icu ? '❌' : 'N '
+
 /**
  * Gets the output of `console.table(…)` as a string.
  */
@@ -40487,7 +40708,7 @@ module.exports = class PendingInterceptorsFormatter {
         Origin: origin,
         Path: path,
         'Status code': statusCode,
-        Persistent: persist ? '✅' : '❌',
+        Persistent: persist ? PERSISTENT : NOT_PERSISTENT,
         Invocations: timesInvoked,
         Remaining: persist ? Infinity : times - timesInvoked
       }))
@@ -41834,7 +42055,7 @@ function setCookie (headers, cookie) {
   const str = stringify(cookie)
 
   if (str) {
-    headers.append('Set-Cookie', stringify(cookie))
+    headers.append('Set-Cookie', str)
   }
 }
 
@@ -42976,6 +43197,7 @@ const { parseMIMEType } = __nccwpck_require__(7704)
 const { MessageEvent } = __nccwpck_require__(5033)
 const { isNetworkError } = __nccwpck_require__(2583)
 const { delay } = __nccwpck_require__(8865)
+const { kEnumerableProperty } = __nccwpck_require__(3983)
 
 let experimentalWarned = false
 
@@ -43424,6 +43646,16 @@ const constantsPropertyDescriptors = {
 
 Object.defineProperties(EventSource, constantsPropertyDescriptors)
 Object.defineProperties(EventSource.prototype, constantsPropertyDescriptors)
+
+Object.defineProperties(EventSource.prototype, {
+  close: kEnumerableProperty,
+  onerror: kEnumerableProperty,
+  onmessage: kEnumerableProperty,
+  onopen: kEnumerableProperty,
+  readyState: kEnumerableProperty,
+  url: kEnumerableProperty,
+  withCredentials: kEnumerableProperty
+})
 
 webidl.converters.EventSourceInitDict = webidl.dictionaryConverter([
   { key: 'withCredentials', converter: webidl.converters.boolean, defaultValue: false }
@@ -44114,12 +44346,12 @@ const encoder = new TextEncoder()
  * @see https://mimesniff.spec.whatwg.org/#http-token-code-point
  */
 const HTTP_TOKEN_CODEPOINTS = /^[!#$%&'*+-.^_|~A-Za-z0-9]+$/
-const HTTP_WHITESPACE_REGEX = /[\u000A|\u000D|\u0009|\u0020]/ // eslint-disable-line
+const HTTP_WHITESPACE_REGEX = /[\u000A\u000D\u0009\u0020]/ // eslint-disable-line
 const ASCII_WHITESPACE_REPLACE_REGEX = /[\u0009\u000A\u000C\u000D\u0020]/g // eslint-disable-line
 /**
  * @see https://mimesniff.spec.whatwg.org/#http-quoted-string-token-code-point
  */
-const HTTP_QUOTED_STRING_TOKENS = /[\u0009|\u0020-\u007E|\u0080-\u00FF]/ // eslint-disable-line
+const HTTP_QUOTED_STRING_TOKENS = /[\u0009\u0020-\u007E\u0080-\u00FF]/ // eslint-disable-line
 
 // https://fetch.spec.whatwg.org/#data-url-processor
 /** @param {URL} dataURL */
@@ -45252,13 +45484,13 @@ module.exports = { File, FileLike, isFileLike }
 
 
 
-const { webidl } = __nccwpck_require__(4890)
+const { toUSVString, isUSVString, bufferToLowerCasedHeaderName } = __nccwpck_require__(3983)
 const { utf8DecodeBytes } = __nccwpck_require__(1310)
 const { HTTP_TOKEN_CODEPOINTS, isomorphicDecode } = __nccwpck_require__(7704)
 const { isFileLike, File: UndiciFile } = __nccwpck_require__(1879)
 const { makeEntry } = __nccwpck_require__(3162)
 const assert = __nccwpck_require__(8061)
-const { isAscii, File: NodeFile } = __nccwpck_require__(2254)
+const { File: NodeFile } = __nccwpck_require__(2254)
 
 const File = globalThis.File ?? NodeFile ?? UndiciFile
 
@@ -45266,6 +45498,18 @@ const formDataNameBuffer = Buffer.from('form-data; name="')
 const filenameBuffer = Buffer.from('; filename')
 const dd = Buffer.from('--')
 const ddcrlf = Buffer.from('--\r\n')
+
+/**
+ * @param {string} chars
+ */
+function isAsciiString (chars) {
+  for (let i = 0; i < chars.length; ++i) {
+    if ((chars.charCodeAt(i) & ~0x7F) !== 0) {
+      return false
+    }
+  }
+  return true
+}
 
 /**
  * @see https://andreubotella.github.io/multipart-form-data/#multipart-form-data-boundary
@@ -45282,7 +45526,7 @@ function validateBoundary (boundary) {
   // - it is composed by bytes in the ranges 0x30 to 0x39, 0x41 to 0x5A, or
   //   0x61 to 0x7A, inclusive (ASCII alphanumeric), or which are 0x27 ('),
   //   0x2D (-) or 0x5F (_).
-  for (let i = 0; i < boundary.length; i++) {
+  for (let i = 0; i < length; ++i) {
     const cp = boundary.charCodeAt(i)
 
     if (!(
@@ -45310,12 +45554,12 @@ function escapeFormDataName (name, encoding = 'utf-8', isFilename = false) {
   // 1. If isFilename is true:
   if (isFilename) {
     // 1.1. Set name to the result of converting name into a scalar value string.
-    name = webidl.converters.USVString(name)
+    name = toUSVString(name)
   } else {
     // 2. Otherwise:
 
     // 2.1. Assert: name is a scalar value string.
-    assert(name === webidl.converters.USVString(name))
+    assert(isUSVString(name))
 
     // 2.2. Replace every occurrence of U+000D (CR) not followed by U+000A (LF),
     //      and every occurrence of U+000A (LF) not preceded by U+000D (CR), in
@@ -45346,14 +45590,16 @@ function multipartFormDataParser (input, mimeType) {
   // 1. Assert: mimeType’s essence is "multipart/form-data".
   assert(mimeType !== 'failure' && mimeType.essence === 'multipart/form-data')
 
+  const boundaryString = mimeType.parameters.get('boundary')
+
   // 2. If mimeType’s parameters["boundary"] does not exist, return failure.
   //    Otherwise, let boundary be the result of UTF-8 decoding mimeType’s
   //    parameters["boundary"].
-  if (!mimeType.parameters.has('boundary')) {
+  if (boundaryString === undefined) {
     return 'failure'
   }
 
-  const boundary = Buffer.from(`--${mimeType.parameters.get('boundary')}`, 'utf8')
+  const boundary = Buffer.from(`--${boundaryString}`, 'utf8')
 
   // 3. Let entry list be an empty entry list.
   const entryList = []
@@ -45452,7 +45698,10 @@ function multipartFormDataParser (input, mimeType) {
       contentType ??= 'text/plain'
 
       // 5.10.2. If contentType is not an ASCII string, set contentType to the empty string.
-      if (!isAscii(Buffer.from(contentType))) {
+
+      // Note: `buffer.isAscii` can be used at zero-cost, but converting a string to a buffer is a high overhead.
+      // Content-Type is a relatively small string, so it is faster to use `String#charCodeAt`.
+      if (!isAsciiString(contentType)) {
         contentType = ''
       }
 
@@ -45466,8 +45715,8 @@ function multipartFormDataParser (input, mimeType) {
     }
 
     // 5.12. Assert: name is a scalar value string and value is either a scalar value string or a File object.
-    assert(name === webidl.converters.USVString(name))
-    assert((typeof value === 'string' && value === webidl.converters.USVString(value)) || isFileLike(value))
+    assert(isUSVString(name))
+    assert((typeof value === 'string' && isUSVString(value)) || isFileLike(value))
 
     // 5.13. Create an entry with name and value, and append it to entry list.
     entryList.push(makeEntry(name, value, filename))
@@ -45532,7 +45781,7 @@ function parseMultipartFormDataHeaders (input, position) {
     )
 
     // 2.8. Byte-lowercase header name and switch on the result:
-    switch (new TextDecoder().decode(headerName).toLowerCase()) {
+    switch (bufferToLowerCasedHeaderName(headerName)) {
       case 'content-disposition': {
         // 1. Set name and filename to null.
         name = filename = null
@@ -45679,16 +45928,13 @@ function parseMultipartFormDataName (input, position) {
  * @param {{ position: number }} position
  */
 function collectASequenceOfBytes (condition, input, position) {
-  const result = []
-  let index = 0
+  let start = position.position
 
-  while (position.position < input.length && condition(input[position.position])) {
-    result[index++] = input[position.position]
-
-    position.position++
+  while (start < input.length && condition(input[start])) {
+    ++start
   }
 
-  return Buffer.from(result, result.length)
+  return input.subarray(position.position, (position.position = start))
 }
 
 /**
@@ -45753,6 +45999,7 @@ const { kEnumerableProperty } = __nccwpck_require__(3983)
 const { File: UndiciFile, FileLike, isFileLike } = __nccwpck_require__(1879)
 const { webidl } = __nccwpck_require__(4890)
 const { File: NativeFile } = __nccwpck_require__(2254)
+const nodeUtil = __nccwpck_require__(7261)
 
 /** @type {globalThis['File']} */
 const File = NativeFile ?? UndiciFile
@@ -45901,6 +46148,30 @@ class FormData {
       this[kState].push(entry)
     }
   }
+
+  [nodeUtil.inspect.custom] (depth, options) {
+    const state = this[kState].reduce((a, b) => {
+      if (a[b.name]) {
+        if (Array.isArray(a[b.name])) {
+          a[b.name].push(b.value)
+        } else {
+          a[b.name] = [a[b.name], b.value]
+        }
+      } else {
+        a[b.name] = b.value
+      }
+
+      return a
+    }, { __proto__: null })
+
+    options.depth ??= depth
+    options.colors ??= true
+
+    const output = nodeUtil.formatWithOptions(options, state)
+
+    // remove [Object null prototype]
+    return `FormData ${output.slice(output.indexOf(']') + 2)}`
+  }
 }
 
 iteratorMixin('FormData', FormData, kState, 'name', 'value')
@@ -46032,6 +46303,7 @@ const {
 } = __nccwpck_require__(1310)
 const { webidl } = __nccwpck_require__(4890)
 const assert = __nccwpck_require__(8061)
+const util = __nccwpck_require__(7261)
 
 const kHeadersMap = Symbol('headers map')
 const kHeadersSortedMap = Symbol('headers map sorted')
@@ -46591,12 +46863,16 @@ class Headers {
     return (this[kHeadersList][kHeadersSortedMap] = headers)
   }
 
-  [Symbol.for('nodejs.util.inspect.custom')] () {
-    webidl.brandCheck(this, Headers)
+  [util.inspect.custom] (depth, options) {
+    options.depth ??= depth
 
-    return this[kHeadersList]
+    return `Headers ${util.formatWithOptions(options, this[kHeadersList].entries)}`
   }
 }
+
+Object.defineProperty(Headers.prototype, util.inspect.custom, {
+  enumerable: false
+})
 
 iteratorMixin('Headers', Headers, kHeadersSortedMap, 0, 1)
 
@@ -48788,29 +49064,6 @@ async function httpNetworkFetch (
               codings = contentEncoding.toLowerCase().split(',').map((x) => x.trim())
             }
             location = headersList.get('location', true)
-          } else {
-            const keys = Object.keys(rawHeaders)
-            for (let i = 0; i < keys.length; ++i) {
-              // The header names are already in lowercase.
-              const key = keys[i]
-              const value = rawHeaders[key]
-              if (key === 'set-cookie') {
-                for (let j = 0; j < value.length; ++j) {
-                  headersList.append(key, value[j], true)
-                }
-              } else {
-                headersList.append(key, value, true)
-              }
-            }
-            // For H2, The header names are already in lowercase,
-            // so we can avoid the `HeadersList#get` call here.
-            const contentEncoding = rawHeaders['content-encoding']
-            if (contentEncoding) {
-              // https://www.rfc-editor.org/rfc/rfc7231#section-3.1.2.1
-              // "All content-coding values are case-insensitive..."
-              codings = contentEncoding.toLowerCase().split(',').map((x) => x.trim()).reverse()
-            }
-            location = rawHeaders.location
           }
 
           this.body = new Readable({ read: resume })
@@ -48952,6 +49205,7 @@ const { extractBody, mixinBody, cloneBody } = __nccwpck_require__(6682)
 const { Headers, fill: fillHeaders, HeadersList } = __nccwpck_require__(2991)
 const { FinalizationRegistry } = __nccwpck_require__(1922)()
 const util = __nccwpck_require__(3983)
+const nodeUtil = __nccwpck_require__(7261)
 const {
   isValidHTTPToken,
   sameOrigin,
@@ -49717,6 +49971,34 @@ class Request {
     // 4. Return clonedRequestObject.
     return fromInnerRequest(clonedRequest, ac.signal, this[kHeaders][kGuard], this[kRealm])
   }
+
+  [nodeUtil.inspect.custom] (depth, options) {
+    if (options.depth === null) {
+      options.depth = 2
+    }
+
+    options.colors ??= true
+
+    const properties = {
+      method: this.method,
+      url: this.url,
+      headers: this.headers,
+      destination: this.destination,
+      referrer: this.referrer,
+      referrerPolicy: this.referrerPolicy,
+      mode: this.mode,
+      credentials: this.credentials,
+      cache: this.cache,
+      redirect: this.redirect,
+      integrity: this.integrity,
+      keepalive: this.keepalive,
+      isReloadNavigation: this.isReloadNavigation,
+      isHistoryNavigation: this.isHistoryNavigation,
+      signal: this.signal
+    }
+
+    return `Request ${nodeUtil.formatWithOptions(options, properties)}`
+  }
 }
 
 mixinBody(Request)
@@ -49949,6 +50231,7 @@ module.exports = { Request, makeRequest, fromInnerRequest, cloneRequest }
 const { Headers, HeadersList, fill } = __nccwpck_require__(2991)
 const { extractBody, cloneBody, mixinBody } = __nccwpck_require__(6682)
 const util = __nccwpck_require__(3983)
+const nodeUtil = __nccwpck_require__(7261)
 const { kEnumerableProperty } = util
 const {
   isValidReasonPhrase,
@@ -50197,6 +50480,28 @@ class Response {
     // 3. Return the result of creating a Response object, given
     // clonedResponse, this’s headers’s guard, and this’s relevant Realm.
     return fromInnerResponse(clonedResponse, this[kHeaders][kGuard], this[kRealm])
+  }
+
+  [nodeUtil.inspect.custom] (depth, options) {
+    if (options.depth === null) {
+      options.depth = 2
+    }
+
+    options.colors ??= true
+
+    const properties = {
+      status: this.status,
+      statusText: this.statusText,
+      headers: this.headers,
+      body: this.body,
+      bodyUsed: this.bodyUsed,
+      ok: this.ok,
+      redirected: this.redirected,
+      type: this.type,
+      url: this.url
+    }
+
+    return `Response ${nodeUtil.formatWithOptions(options, properties)}`
   }
 }
 
@@ -50566,11 +50871,15 @@ const assert = __nccwpck_require__(8061)
 const { isUint8Array } = __nccwpck_require__(3746)
 const { webidl } = __nccwpck_require__(4890)
 
+let supportedHashes = []
+
 // https://nodejs.org/api/crypto.html#determining-if-crypto-support-is-unavailable
 /** @type {import('crypto')} */
 let crypto
 try {
   crypto = __nccwpck_require__(6005)
+  const possibleRelevantHashes = ['sha256', 'sha384', 'sha512']
+  supportedHashes = crypto.getHashes().filter((hash) => possibleRelevantHashes.includes(hash))
 /* c8 ignore next 3 */
 } catch {
 
@@ -50599,6 +50908,12 @@ function responseLocationURL (response, requestFragment) {
   // 3. If location is a header value, then set location to the result of
   //    parsing location with response’s URL.
   if (location !== null && isValidHeaderValue(location)) {
+    if (!isValidEncodedURL(location)) {
+      // Some websites respond location header in UTF-8 form without encoding them as ASCII
+      // and major browsers redirect them to correctly UTF-8 encoded addresses.
+      // Here, we handle that behavior in the same way.
+      location = normalizeBinaryStringToUtf8(location)
+    }
     location = new URL(location, responseURL(response))
   }
 
@@ -50610,6 +50925,36 @@ function responseLocationURL (response, requestFragment) {
 
   // 5. Return location.
   return location
+}
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc1738#section-2.2
+ * @param {string} url
+ * @returns {boolean}
+ */
+function isValidEncodedURL (url) {
+  for (const c of url) {
+    const code = c.charCodeAt(0)
+    // Not used in US-ASCII
+    if (code >= 0x80) {
+      return false
+    }
+    // Control characters
+    if ((code >= 0x00 && code <= 0x1F) || code === 0x7F) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * If string contains non-ASCII characters, assumes it's UTF-8 encoded and decodes it.
+ * Since UTF-8 is a superset of ASCII, this will work for ASCII strings as well.
+ * @param {string} value
+ * @returns {string}
+ */
+function normalizeBinaryStringToUtf8 (value) {
+  return Buffer.from(value, 'binary').toString('utf8')
 }
 
 /** @returns {URL} */
@@ -51084,66 +51429,56 @@ function bytesMatch (bytes, metadataList) {
     return true
   }
 
-  // 3. If parsedMetadata is the empty set, return true.
+  // 3. If response is not eligible for integrity validation, return false.
+  // TODO
+
+  // 4. If parsedMetadata is the empty set, return true.
   if (parsedMetadata.length === 0) {
     return true
   }
 
-  // 4. Let metadata be the result of getting the strongest
+  // 5. Let metadata be the result of getting the strongest
   //    metadata from parsedMetadata.
-  const list = parsedMetadata.sort((c, d) => d.algo.localeCompare(c.algo))
-  // get the strongest algorithm
-  const strongest = list[0].algo
-  // get all entries that use the strongest algorithm; ignore weaker
-  const metadata = list.filter((item) => item.algo === strongest)
+  const strongest = getStrongestMetadata(parsedMetadata)
+  const metadata = filterMetadataListByAlgorithm(parsedMetadata, strongest)
 
-  // 5. For each item in metadata:
+  // 6. For each item in metadata:
   for (const item of metadata) {
     // 1. Let algorithm be the alg component of item.
     const algorithm = item.algo
 
     // 2. Let expectedValue be the val component of item.
-    let expectedValue = item.hash
+    const expectedValue = item.hash
 
     // See https://github.com/web-platform-tests/wpt/commit/e4c5cc7a5e48093220528dfdd1c4012dc3837a0e
     // "be liberal with padding". This is annoying, and it's not even in the spec.
 
-    if (expectedValue.endsWith('==')) {
-      expectedValue = expectedValue.slice(0, -2)
-    }
-
     // 3. Let actualValue be the result of applying algorithm to bytes.
     let actualValue = crypto.createHash(algorithm).update(bytes).digest('base64')
 
-    if (actualValue.endsWith('==')) {
-      actualValue = actualValue.slice(0, -2)
+    if (actualValue[actualValue.length - 1] === '=') {
+      if (actualValue[actualValue.length - 2] === '=') {
+        actualValue = actualValue.slice(0, -2)
+      } else {
+        actualValue = actualValue.slice(0, -1)
+      }
     }
 
     // 4. If actualValue is a case-sensitive match for expectedValue,
     //    return true.
-    if (actualValue === expectedValue) {
-      return true
-    }
-
-    let actualBase64URL = crypto.createHash(algorithm).update(bytes).digest('base64url')
-
-    if (actualBase64URL.endsWith('==')) {
-      actualBase64URL = actualBase64URL.slice(0, -2)
-    }
-
-    if (actualBase64URL === expectedValue) {
+    if (compareBase64Mixed(actualValue, expectedValue)) {
       return true
     }
   }
 
-  // 6. Return false.
+  // 7. Return false.
   return false
 }
 
 // https://w3c.github.io/webappsec-subresource-integrity/#grammardef-hash-with-options
 // https://www.w3.org/TR/CSP2/#source-list-syntax
 // https://www.rfc-editor.org/rfc/rfc5234#appendix-B.1
-const parseHashWithOptions = /(?<algo>sha256|sha384|sha512)-(?<hash>[A-Za-z0-9+/]+={0,2}(?=\s|$))( +[!-~]*)?/i
+const parseHashWithOptions = /(?<algo>sha256|sha384|sha512)-((?<hash>[A-Za-z0-9+/]+|[A-Za-z0-9_-]+)={0,2}(?:\s|$)( +[!-~]*)?)?/i
 
 /**
  * @see https://w3c.github.io/webappsec-subresource-integrity/#parse-metadata
@@ -51157,8 +51492,6 @@ function parseMetadata (metadata) {
   // 2. Let empty be equal to true.
   let empty = true
 
-  const supportedHashes = crypto.getHashes()
-
   // 3. For each token returned by splitting metadata on spaces:
   for (const token of metadata.split(' ')) {
     // 1. Set empty to false.
@@ -51168,7 +51501,11 @@ function parseMetadata (metadata) {
     const parsedToken = parseHashWithOptions.exec(token)
 
     // 3. If token does not parse, continue to the next token.
-    if (parsedToken === null || parsedToken.groups === undefined) {
+    if (
+      parsedToken === null ||
+      parsedToken.groups === undefined ||
+      parsedToken.groups.algo === undefined
+    ) {
       // Note: Chromium blocks the request at this point, but Firefox
       // gives a warning that an invalid integrity was given. The
       // correct behavior is to ignore these, and subsequently not
@@ -51177,11 +51514,11 @@ function parseMetadata (metadata) {
     }
 
     // 4. Let algorithm be the hash-algo component of token.
-    const algorithm = parsedToken.groups.algo
+    const algorithm = parsedToken.groups.algo.toLowerCase()
 
     // 5. If algorithm is a hash function recognized by the user
     //    agent, add the parsed token to result.
-    if (supportedHashes.includes(algorithm.toLowerCase())) {
+    if (supportedHashes.includes(algorithm)) {
       result.push(parsedToken.groups)
     }
   }
@@ -51192,6 +51529,82 @@ function parseMetadata (metadata) {
   }
 
   return result
+}
+
+/**
+ * @param {{ algo: 'sha256' | 'sha384' | 'sha512' }[]} metadataList
+ */
+function getStrongestMetadata (metadataList) {
+  // Let algorithm be the algo component of the first item in metadataList.
+  // Can be sha256
+  let algorithm = metadataList[0].algo
+  // If the algorithm is sha512, then it is the strongest
+  // and we can return immediately
+  if (algorithm[3] === '5') {
+    return algorithm
+  }
+
+  for (let i = 1; i < metadataList.length; ++i) {
+    const metadata = metadataList[i]
+    // If the algorithm is sha512, then it is the strongest
+    // and we can break the loop immediately
+    if (metadata.algo[3] === '5') {
+      algorithm = 'sha512'
+      break
+    // If the algorithm is sha384, then a potential sha256 or sha384 is ignored
+    } else if (algorithm[3] === '3') {
+      continue
+    // algorithm is sha256, check if algorithm is sha384 and if so, set it as
+    // the strongest
+    } else if (metadata.algo[3] === '3') {
+      algorithm = 'sha384'
+    }
+  }
+  return algorithm
+}
+
+function filterMetadataListByAlgorithm (metadataList, algorithm) {
+  if (metadataList.length === 1) {
+    return metadataList
+  }
+
+  let pos = 0
+  for (let i = 0; i < metadataList.length; ++i) {
+    if (metadataList[i].algo === algorithm) {
+      metadataList[pos++] = metadataList[i]
+    }
+  }
+
+  metadataList.length = pos
+
+  return metadataList
+}
+
+/**
+ * Compares two base64 strings, allowing for base64url
+ * in the second string.
+ *
+* @param {string} actualValue always base64
+ * @param {string} expectedValue base64 or base64url
+ * @returns {boolean}
+ */
+function compareBase64Mixed (actualValue, expectedValue) {
+  if (actualValue.length !== expectedValue.length) {
+    return false
+  }
+  for (let i = 0; i < actualValue.length; ++i) {
+    if (actualValue[i] !== expectedValue[i]) {
+      if (
+        (actualValue[i] === '+' && expectedValue[i] === '-') ||
+        (actualValue[i] === '/' && expectedValue[i] === '_')
+      ) {
+        continue
+      }
+      return false
+    }
+  }
+
+  return true
 }
 
 // https://w3c.github.io/webappsec-upgrade-insecure-requests/#upgrade-request
@@ -54679,8 +55092,6 @@ const { WebsocketFrameSend } = __nccwpck_require__(2391)
 // Copyright (c) 2013 Arnout Kazemier and contributors
 // Copyright (c) 2016 Luigi Pinca and contributors
 
-const textDecoder = new TextDecoder('utf-8', { fatal: true })
-
 class ByteParser extends Writable {
   #buffers = []
   #byteOffset = 0
@@ -54983,7 +55394,8 @@ class ByteParser extends Writable {
     }
 
     try {
-      reason = textDecoder.decode(reason)
+      // TODO: optimize this
+      reason = new TextDecoder('utf-8', { fatal: true }).decode(reason)
     } catch {
       return null
     }
@@ -55095,8 +55507,6 @@ function fireEvent (e, target, eventConstructor = Event, eventInitDict = {}) {
   target.dispatchEvent(event)
 }
 
-const textDecoder = new TextDecoder('utf-8', { fatal: true })
-
 /**
  * @see https://websockets.spec.whatwg.org/#feedback-from-the-protocol
  * @param {import('./websocket').WebSocket} ws
@@ -55116,7 +55526,7 @@ function websocketMessageReceived (ws, type, data) {
     // -> type indicates that the data is Text
     //      a new DOMString containing data
     try {
-      dataForEvent = textDecoder.decode(data)
+      dataForEvent = new TextDecoder('utf-8', { fatal: true }).decode(data)
     } catch {
       failWebsocketConnection(ws, 'Received invalid UTF-8 in text frame.')
       return
