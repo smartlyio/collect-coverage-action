@@ -57310,6 +57310,7 @@ const node_assert_1 = __importDefault(__nccwpck_require__(8061));
 const istanbul_lib_coverage_1 = __importDefault(__nccwpck_require__(3896));
 const lcov_parser_1 = __importDefault(__nccwpck_require__(6292));
 const fast_xml_parser_1 = __nccwpck_require__(2603);
+const retryCount = 3;
 async function generateSummary(file) {
     const map = istanbul_lib_coverage_1.default.createCoverageMap({});
     const summary = istanbul_lib_coverage_1.default.createCoverageSummary();
@@ -57435,13 +57436,23 @@ async function publishCoverage(opts, coverage) {
                     console.log(data);
                     continue;
                 }
-                const response = await fetch(opts.url, {
-                    method: 'POST',
-                    body: JSON.stringify(data),
-                    headers: { Authorization: `Bearer ${opts.token}`, 'Content-Type': 'application/json' }
-                });
-                if (!response.ok) {
-                    throw new Error(`Failed to publish coverage: ${response.status} ${response.statusText}`);
+                const body = JSON.stringify(data);
+                let attempts = 0;
+                let done = false;
+                while (!done) {
+                    const response = await fetch(opts.url, {
+                        method: 'POST',
+                        body,
+                        headers: { Authorization: `Bearer ${opts.token}`, 'Content-Type': 'application/json' }
+                    });
+                    if (response.ok) {
+                        done = true;
+                    }
+                    else {
+                        if (attempts++ > retryCount) {
+                            throw new Error(`Failed to publish coverage after ${attempts} attempts: ${response.status} ${response.statusText}`);
+                        }
+                    }
                 }
             }
         }
