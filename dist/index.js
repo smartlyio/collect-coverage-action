@@ -57310,6 +57310,7 @@ const node_assert_1 = __importDefault(__nccwpck_require__(8061));
 const istanbul_lib_coverage_1 = __importDefault(__nccwpck_require__(3896));
 const lcov_parser_1 = __importDefault(__nccwpck_require__(6292));
 const fast_xml_parser_1 = __nccwpck_require__(2603);
+const util_1 = __nccwpck_require__(3837);
 const retryCount = 3;
 async function generateSummary(file) {
     const map = istanbul_lib_coverage_1.default.createCoverageMap({});
@@ -57452,6 +57453,7 @@ async function publishCoverage(opts, coverage) {
                         if (attempts++ > retryCount) {
                             throw new Error(`Failed to publish coverage after ${attempts} attempts: ${response.status} ${response.statusText}`);
                         }
+                        await (0, util_1.promisify)(setTimeout)(Math.pow(attempts, 2) * 1000);
                     }
                 }
             }
