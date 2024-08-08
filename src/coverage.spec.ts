@@ -32,6 +32,7 @@ describe('coverage', () => {
         .persist();
       await expect(
         coverage.run({
+          backoffMultiplierMs: 1,
           coverage: 'test/summary/a/coverage/coverage.json',
           token: 'token',
           project: 'project',
@@ -77,6 +78,7 @@ describe('coverage', () => {
         .reply(200, {})
         .persist();
       await coverage.run({
+        backoffMultiplierMs: 1,
         coverage: 'test/summary/a/coverage/coverage.json',
         token: 'token',
         project: 'project',
@@ -123,6 +125,7 @@ describe('coverage', () => {
         .reply(200, {})
         .persist();
       await coverage.run({
+        backoffMultiplierMs: 1,
         coverage: 'test/summary/a/coverage/coverage.json',
         token: 'token',
         project: 'project',

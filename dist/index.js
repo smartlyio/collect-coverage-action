@@ -57418,6 +57418,7 @@ async function run(opts) {
 }
 exports.run = run;
 async function publishCoverage(opts, coverage) {
+    var _a;
     for (const flavor of ['branches', 'statements', 'functions', 'lines']) {
         const pct = coverage[flavor].pct;
         const coveredItems = coverage[flavor].covered;
@@ -57453,7 +57454,7 @@ async function publishCoverage(opts, coverage) {
                         if (attempts++ > retryCount) {
                             throw new Error(`Failed to publish coverage after ${attempts} attempts: ${response.status} ${response.statusText}`);
                         }
-                        await (0, util_1.promisify)(setTimeout)(Math.pow(attempts, 2) * 1000);
+                        await (0, util_1.promisify)(setTimeout)(Math.pow(attempts, 2) * ((_a = opts.backoffMultiplierMs) !== null && _a !== void 0 ? _a : 1000));
                     }
                 }
             }

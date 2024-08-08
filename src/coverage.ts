@@ -3,9 +3,13 @@ import assert from 'node:assert';
 import { default as libCoverage } from 'istanbul-lib-coverage';
 import lcovParser, { SectionSummary } from '@friedemannsommer/lcov-parser';
 import { XMLParser } from 'fast-xml-parser';
-import { promisify } from "util";
+import { promisify } from 'util';
 
 type Opts = {
+  /**
+   * Multiply retry backoff by backoffMultiplierMs to get the wait time between retries
+   */
+  backoffMultiplierMs?: number;
   coverage: string;
   token: string;
   project: string;
@@ -183,7 +187,7 @@ async function publishCoverage(
                 `Failed to publish coverage after ${attempts} attempts: ${response.status} ${response.statusText}`
               );
             }
-            await promisify(setTimeout)(Math.pow(attempts, 2) * 1000);
+            await promisify(setTimeout)(Math.pow(attempts, 2) * (opts.backoffMultiplierMs ?? 1000));
           }
         }
       }
