@@ -18,6 +18,126 @@ describe('coverage', () => {
     setGlobalDispatcher(new Agent());
   });
 
+  describe('network error handling', () => {
+    it('it eventually gives up on retries', async () => {
+      mockClient
+        .intercept({
+          method: 'POST',
+          path: '/',
+          headers: {
+            authorization: `Bearer token`
+          }
+        })
+        .reply(503, {})
+        .persist();
+      await expect(
+        coverage.run({
+          backoffMultiplierMs: 1,
+          coverage: 'test/summary/a/coverage/coverage.json',
+          token: 'token',
+          project: 'project',
+          tag: 'pr-124',
+          url: 'https://example.com',
+          coverageFormat: 'summary'
+        })
+      ).rejects.toThrow();
+      mockAgent.assertNoPendingInterceptors();
+    });
+    it('retries 4xx failures', async () => {
+      let calls = 0;
+      let failingCalls = 0;
+      mockClient
+        .intercept({
+          method: 'POST',
+          path: '/',
+          headers: {
+            authorization: `Bearer token`
+          },
+          body() {
+            if (failingCalls < 1) {
+              failingCalls++;
+              return true;
+            }
+            return false;
+          }
+        })
+        .reply(403, {})
+        .persist();
+      mockClient
+        .intercept({
+          method: 'POST',
+          path: '/',
+          headers: {
+            authorization: `Bearer token`
+          },
+          body() {
+            calls++;
+            return true;
+          }
+        })
+        .reply(200, {})
+        .persist();
+      await coverage.run({
+        backoffMultiplierMs: 1,
+        coverage: 'test/summary/a/coverage/coverage.json',
+        token: 'token',
+        project: 'project',
+        tag: 'pr-124',
+        url: 'https://example.com',
+        coverageFormat: 'summary'
+      });
+      mockAgent.assertNoPendingInterceptors();
+      expect(failingCalls).toEqual(1);
+      expect(calls).toEqual(5);
+    });
+    it('retries 5xx failures', async () => {
+      let calls = 0;
+      let failingCalls = 0;
+      mockClient
+        .intercept({
+          method: 'POST',
+          path: '/',
+          headers: {
+            authorization: `Bearer token`
+          },
+          body() {
+            if (failingCalls < 1) {
+              failingCalls++;
+              return true;
+            }
+            return false;
+          }
+        })
+        .reply(503, {})
+        .persist();
+      mockClient
+        .intercept({
+          method: 'POST',
+          path: '/',
+          headers: {
+            authorization: `Bearer token`
+          },
+          body() {
+            calls++;
+            return true;
+          }
+        })
+        .reply(200, {})
+        .persist();
+      await coverage.run({
+        backoffMultiplierMs: 1,
+        coverage: 'test/summary/a/coverage/coverage.json',
+        token: 'token',
+        project: 'project',
+        tag: 'pr-124',
+        url: 'https://example.com',
+        coverageFormat: 'summary'
+      });
+      mockAgent.assertNoPendingInterceptors();
+      expect(failingCalls).toEqual(1);
+      expect(calls).toEqual(5);
+    });
+  });
   it("generates coverage for 'summary' format", async () => {
     let calls = 0;
     mockClient

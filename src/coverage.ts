@@ -3,8 +3,13 @@ import assert from 'node:assert';
 import { default as libCoverage } from 'istanbul-lib-coverage';
 import lcovParser, { SectionSummary } from '@friedemannsommer/lcov-parser';
 import { XMLParser } from 'fast-xml-parser';
+import { promisify } from 'util';
 
 type Opts = {
+  /**
+   * Multiply retry backoff by backoffMultiplierMs to get the wait time between retries
+   */
+  backoffMultiplierMs?: number;
   coverage: string;
   token: string;
   project: string;
@@ -14,6 +19,7 @@ type Opts = {
   coverageFormat: 'summary' | 'istanbul' | 'lcov' | 'cobertura';
 };
 
+const retryCount = 3;
 async function generateSummary(file: string): Promise<libCoverage.CoverageSummary> {
   const map = libCoverage.createCoverageMap({});
   const summary = libCoverage.createCoverageSummary();
@@ -164,14 +170,25 @@ async function publishCoverage(
           console.log(data);
           continue;
         }
-        const response = await fetch(opts.url, {
-          method: 'POST',
-          body: JSON.stringify(data),
-          headers: { Authorization: `Bearer ${opts.token}`, 'Content-Type': 'application/json' }
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to publish coverage: ${response.status} ${response.statusText}`);
+        const body = JSON.stringify(data);
+        let attempts = 0;
+        let done = false;
+        while (!done) {
+          const response = await fetch(opts.url, {
+            method: 'POST',
+            body,
+            headers: { Authorization: `Bearer ${opts.token}`, 'Content-Type': 'application/json' }
+          });
+          if (response.ok) {
+            done = true;
+          } else {
+            if (attempts++ > retryCount) {
+              throw new Error(
+                `Failed to publish coverage after ${attempts} attempts: ${response.status} ${response.statusText}`
+              );
+            }
+            await promisify(setTimeout)(Math.pow(attempts, 2) * (opts.backoffMultiplierMs ?? 1000));
+          }
         }
       }
     }
