@@ -57457,7 +57457,6 @@ async function publishCoverage(opts, coverage) {
                     total_items: totalItems
                 };
                 if (opts.dryRun) {
-                    // eslint-disable-next-line no-console
                     console.log(data);
                     continue;
                 }

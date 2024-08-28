@@ -166,7 +166,6 @@ async function publishCoverage(
           total_items: totalItems
         };
         if (opts.dryRun) {
-          // eslint-disable-next-line no-console
           console.log(data);
           continue;
         }
