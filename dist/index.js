@@ -59072,6 +59072,32 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 1856:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.buildRunOptions = void 0;
+/**
+ * Builds coverage.run options from action inputs, applying defaults for empty strings.
+ * Uses || instead of ?? because core.getInput returns '' for unset inputs.
+ */
+function buildRunOptions(inputs) {
+    return {
+        coverage: inputs.coverageFile,
+        token: inputs.token,
+        tag: inputs.prNumber != null ? `pr-${inputs.prNumber}` : 'main',
+        project: inputs.projectName || inputs.repoName,
+        url: inputs.url,
+        coverageFormat: (inputs.coverageFormat || 'istanbul'),
+        dryRun: inputs.dryRun === 'true'
+    };
+}
+exports.buildRunOptions = buildRunOptions;
+
+
+/***/ }),
+
 /***/ 9084:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -59294,24 +59320,24 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const github = __importStar(__nccwpck_require__(5438));
 const coverage = __importStar(__nccwpck_require__(9084));
+const buildRunOptions_1 = __nccwpck_require__(1856);
 const tokenArgument = 'authorization-token';
 const coverageFileArgument = 'coverage-file';
 const urlArgument = 'url';
 const projectNameArgument = 'project-name';
 async function run() {
-    var _a, _b;
-    const pr = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.number;
-    const coverageFile = core.getInput(coverageFileArgument);
-    const projectName = core.getInput(projectNameArgument);
-    await coverage.run({
-        coverage: coverageFile,
+    var _a;
+    const inputs = {
+        coverageFile: core.getInput(coverageFileArgument),
         token: core.getInput(tokenArgument),
-        tag: pr != null ? `pr-${pr}` : 'main',
-        project: projectName !== null && projectName !== void 0 ? projectName : github.context.repo.repo,
+        projectName: core.getInput(projectNameArgument),
         url: core.getInput(urlArgument),
-        coverageFormat: ((_b = core.getInput('coverage-format')) !== null && _b !== void 0 ? _b : 'istanbul'),
-        dryRun: core.getInput('dry-run') === 'true'
-    });
+        coverageFormat: core.getInput('coverage-format'),
+        dryRun: core.getInput('dry-run'),
+        prNumber: (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.number,
+        repoName: github.context.repo.repo
+    };
+    await coverage.run((0, buildRunOptions_1.buildRunOptions)(inputs));
 }
 void run();
 

@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as coverage from './coverage';
+import { buildRunOptions, ActionInputs } from './buildRunOptions';
 
 const tokenArgument = 'authorization-token';
 const coverageFileArgument = 'coverage-file';
@@ -8,18 +9,17 @@ const urlArgument = 'url';
 const projectNameArgument = 'project-name';
 
 async function run() {
-  const pr = github.context.payload.pull_request?.number;
-  const coverageFile = core.getInput(coverageFileArgument);
-  const projectName = core.getInput(projectNameArgument);
-  await coverage.run({
-    coverage: coverageFile,
+  const inputs: ActionInputs = {
+    coverageFile: core.getInput(coverageFileArgument),
     token: core.getInput(tokenArgument),
-    tag: pr != null ? `pr-${pr}` : 'main',
-    project: projectName ?? github.context.repo.repo,
+    projectName: core.getInput(projectNameArgument),
     url: core.getInput(urlArgument),
-    coverageFormat: (core.getInput('coverage-format') ?? 'istanbul') as 'summary' | 'istanbul',
-    dryRun: core.getInput('dry-run') === 'true'
-  });
+    coverageFormat: core.getInput('coverage-format'),
+    dryRun: core.getInput('dry-run'),
+    prNumber: github.context.payload.pull_request?.number,
+    repoName: github.context.repo.repo
+  };
+  await coverage.run(buildRunOptions(inputs));
 }
 
 void run();
