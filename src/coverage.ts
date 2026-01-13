@@ -154,7 +154,7 @@ async function publishCoverage(
     const pct = coverage[flavor].pct;
     const coveredItems = coverage[flavor].covered;
     const totalItems = coverage[flavor].total;
-
+    
     if (Number.isFinite(pct)) {
       if (opts.token) {
         const data = {

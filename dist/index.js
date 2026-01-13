@@ -59297,15 +59297,17 @@ const coverage = __importStar(__nccwpck_require__(9084));
 const tokenArgument = 'authorization-token';
 const coverageFileArgument = 'coverage-file';
 const urlArgument = 'url';
+const projectNameArgument = 'project-name';
 async function run() {
     var _a, _b;
     const pr = (_a = github.context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.number;
     const coverageFile = core.getInput(coverageFileArgument);
+    const projectName = core.getInput(projectNameArgument);
     await coverage.run({
         coverage: coverageFile,
         token: core.getInput(tokenArgument),
         tag: pr != null ? `pr-${pr}` : 'main',
-        project: github.context.repo.repo,
+        project: projectName !== null && projectName !== void 0 ? projectName : github.context.repo.repo,
         url: core.getInput(urlArgument),
         coverageFormat: ((_b = core.getInput('coverage-format')) !== null && _b !== void 0 ? _b : 'istanbul'),
         dryRun: core.getInput('dry-run') === 'true'
