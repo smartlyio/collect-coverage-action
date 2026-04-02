@@ -56,6 +56,11 @@
       "matchPackagePrefixes": ["@types"],
       "labels": ["no release"],
       "automerge": true
+    },
+    {
+      "matchUpdateTypes": ["pin", "pinDigest"],
+      "minimumReleaseAge": null,
+      "automerge": true
     }
   ],
   "github-actions": {
@@ -63,5 +68,6 @@
     "labels": ["no release", "renovate-deps"],
     "automerge": true
   },
+  
   "minimumReleaseAge": "30 days"
 }
