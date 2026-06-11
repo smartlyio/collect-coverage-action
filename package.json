@@ -36,6 +36,6 @@
     "ts-node": "10.9.2",
     "typescript": "5.4.2",
     "typescript-eslint": "8.60.0",
-    "undici": "6.26.0"
+    "undici": "8.4.1"
   }
 }
