@@ -1,0 +1,14 @@
+packages:
+  - '.'
+
+engineStrict: true
+
+minimumReleaseAge: 4320 # 3 days
+
+strictDepBuilds: true
+
+allowBuilds: {}
+
+blockExoticSubdeps: true
+
+verifyDepsBeforeRun: false
