@@ -45,4 +45,4 @@ coverage json
 
 ## Development
 
-To test `yarn ts-node test.ts`
+To test `pnpm exec ts-node test.ts`
