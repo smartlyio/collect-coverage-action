@@ -12,3 +12,6 @@ allowBuilds: {}
 blockExoticSubdeps: true
 
 verifyDepsBeforeRun: false
+minimumReleaseAgeExclude:
+  # Renovate security update: undici@6.28.0
+  - undici@6.28.0
