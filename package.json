@@ -1,7 +1,7 @@
 {
   "name": "collect-coverage-action",
   "version": "3.4.9",
-  "packageManager": "pnpm@11.22.0",
+  "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22.13",
     "pnpm": "^11.22.0"
